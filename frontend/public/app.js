@@ -149,16 +149,51 @@ function renderAccount() {
   $("#account").setAttribute("aria-pressed", String(Boolean(state.user)));
 }
 
+// Mirrors PASSWORD_RULES in backend/auth.js. The server is the authority — this
+// only exists so someone typing a password is told what is missing as they go,
+// rather than after a round trip.
+const PW_RULES = {
+  len: (p) => p.length >= 8,
+  alpha: (p) => /\p{L}/u.test(p),
+  num: (p) => /\d/.test(p),
+  special: (p) => /[^\p{L}\d]/u.test(p),
+};
+
+function passwordState() {
+  const pw = $("#authPassword").value;
+  const repeat = $("#authRepeat").value;
+  const results = Object.fromEntries(Object.entries(PW_RULES).map(([k, fn]) => [k, fn(pw)]));
+  results.match = pw.length > 0 && pw === repeat;
+  return { pw, repeat, results, ok: Object.values(results).every(Boolean) };
+}
+
+function paintPasswordRules() {
+  if (state.authMode !== "up") return;
+  const { repeat, results } = passwordState();
+  for (const [rule, pass] of Object.entries(results)) {
+    const li = $(`#pwRules li[data-rule="${rule}"]`);
+    if (!li) continue;
+    li.classList.toggle("ok", pass);
+    // Only call a mismatch out once they have actually started retyping.
+    li.classList.toggle("bad", rule === "match" && !pass && repeat.length > 0);
+  }
+}
+
 function openAuth(mode = "in") {
   state.authMode = mode;
   const signedIn = mode === "account";
+  const signingUp = mode === "up";
   $("#authWrap").hidden = false;
   $("#authError").hidden = true;
   $("#authFields").hidden = signedIn;
   $("#authAccount").hidden = !signedIn;
-  $("#nameField").hidden = mode !== "up";
-  $("#authPassword").autocomplete = mode === "up" ? "new-password" : "current-password";
+  $("#nameField").hidden = !signingUp;
+  $("#repeatField").hidden = !signingUp;
+  $("#pwRules").hidden = !signingUp;
+  $("#authPassword").autocomplete = signingUp ? "new-password" : "current-password";
+  $("#authPassword").placeholder = signingUp ? "Letters, numbers and a symbol" : "Your password";
   $("#authSwap").parentElement.hidden = signedIn;
+  if (signingUp) paintPasswordRules();
 
   const copy = {
     in: ["SIGN IN", "Your list stops living in this browser and starts following you.", "Sign in →", "No account yet?", "Create one"],
@@ -204,6 +239,14 @@ async function submitAuth(e) {
   const password = $("#authPassword").value;
   const name = $("#authName").value.trim();
   if (!email || !password) return authError("Email and password are both required.");
+
+  if (state.authMode === "up") {
+    const { repeat, results, ok } = passwordState();
+    paintPasswordRules();
+    if (!results.match && repeat.length === 0) return authError("Please repeat your password.");
+    if (!results.match) return authError("The two passwords do not match.");
+    if (!ok) return authError("Your password is still missing something — see the checklist.");
+  }
 
   authBusy(true);
   $("#authError").hidden = true;
@@ -710,6 +753,7 @@ $("#account").onclick = () => openAuth(state.user ? "account" : "in");
 $("#closeAuth").onclick = closeAuth;
 $("#authForm").addEventListener("submit", submitAuth);
 $("#authSwap").onclick = () => openAuth(state.authMode === "up" ? "in" : "up");
+for (const id of ["#authPassword", "#authRepeat"]) $(id).addEventListener("input", paintPasswordRules);
 
 $("#openList").onclick = (e) => {
   state.listOpen = !state.listOpen;

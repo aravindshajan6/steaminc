@@ -128,6 +128,19 @@
         <span>Password</span>
         <input id="authPassword" type="password" minlength="8" autocomplete="current-password" placeholder="At least 8 characters" />
       </label>
+
+      <label class="auth-field" id="repeatField" hidden>
+        <span>Repeat password</span>
+        <input id="authRepeat" type="password" autocomplete="new-password" placeholder="Type it again" />
+      </label>
+
+      <ul class="pw-rules" id="pwRules" hidden aria-live="polite">
+        <li data-rule="len">8+ characters</li>
+        <li data-rule="alpha">a letter</li>
+        <li data-rule="num">a number</li>
+        <li data-rule="special">a symbol</li>
+        <li data-rule="match">both entries match</li>
+      </ul>
     </div>
 
     <div id="authAccount" hidden>

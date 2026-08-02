@@ -561,6 +561,27 @@ a.prov b { font-size: 9px; opacity: .7; }
 .auth-who { font-size: 14px; line-height: 1.6; margin: 0 0 22px; }
 .auth-who b { color: var(--acid); }
 
+/* Live signup requirements. Shows what is still missing rather than rejecting
+   the whole form after the fact. */
+.pw-rules {
+  list-style: none; margin: 0 0 18px; padding: 12px 13px;
+  border: 1px dashed color-mix(in oklab, var(--paper) 28%, transparent);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px;
+}
+.pw-rules li {
+  font: 700 10px/1.3 var(--mono); letter-spacing: .06em;
+  color: var(--dim); display: flex; align-items: center; gap: 7px;
+  transition: color .18s;
+}
+.pw-rules li::before {
+  content: "○"; font-size: 11px; color: var(--dim); transition: color .18s, content .18s;
+}
+.pw-rules li.ok { color: var(--acid); }
+.pw-rules li.ok::before { content: "●"; color: var(--acid); }
+.pw-rules li[data-rule="match"] { grid-column: 1 / -1; }
+.pw-rules li.bad { color: var(--magenta); }
+.pw-rules li.bad::before { content: "✕"; color: var(--magenta); }
+
 .auth-error {
   border: 2px solid var(--magenta); color: var(--magenta);
   padding: 10px 12px; margin: 0 0 16px;
