@@ -410,6 +410,37 @@ const ROUTES = {
     });
   },
 
+  // Episodes for one season. Separate from /api/title because a long-running
+  // series is dozens of episodes, and most visitors never open a season at all.
+  async "/api/season"(params) {
+    const id = params.get("id");
+    const season = Number(params.get("season"));
+    if (!id || !Number.isInteger(season) || season < 0) {
+      throw Object.assign(new Error("id and season are required."), { status: 400 });
+    }
+    if (DEMO) return { id, season, name: `Season ${season}`, episodes: [] };
+
+    return cached(`season:${id}:${season}`, 36e5, async () => {
+      const d = await tmdb(`/tv/${encodeURIComponent(id)}/season/${season}`);
+      return {
+        id,
+        season,
+        name: d.name || `Season ${season}`,
+        overview: d.overview || "",
+        poster: d.poster_path || null,
+        episodes: (d.episodes || []).map((e) => ({
+          number: e.episode_number,
+          name: e.name || `Episode ${e.episode_number}`,
+          overview: e.overview || "",
+          still: e.still_path || null,
+          air: e.air_date || "",
+          runtime: e.runtime || null,
+          score: e.vote_average ? Math.round(e.vote_average * 10) : null,
+        })),
+      };
+    });
+  },
+
   async "/api/genres"() {
     if (DEMO) {
       return { movie: FEED_GENRES.map((g) => ({ id: g.genre, name: g.label })), tv: [] };
@@ -653,6 +684,21 @@ const ROUTES = {
         tagline: d.tagline || "",
         runtime,
         seasons: d.number_of_seasons || null,
+        // Season summaries ride along on the detail response TMDB already returns,
+        // so the sheet can render a season picker without a second round trip.
+        // Episodes stay lazy — 62 of them is a lot to fetch for a page nobody
+        // may scroll to.
+        seasonList: (d.seasons || [])
+          .filter((s) => s.episode_count > 0)
+          .map((s) => ({
+            number: s.season_number,
+            name: s.name,
+            episodes: s.episode_count,
+            year: (s.air_date || "").slice(0, 4),
+            poster: s.poster_path || null,
+            overview: s.overview || "",
+            specials: s.season_number === 0,
+          })),
         episodes: d.number_of_episodes || null,
         status: d.status || "",
         genres: (d.genres || []).map((g) => g.name),

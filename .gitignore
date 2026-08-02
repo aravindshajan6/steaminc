@@ -12,3 +12,6 @@
 node_modules/
 *.log
 .DS_Store
+
+# Local research notes — kept out of the public repo.
+extracted_info.md
