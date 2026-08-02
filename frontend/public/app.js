@@ -343,14 +343,23 @@ async function signOut() {
 
 /* ----------------------------------------------------------------- cards -- */
 
+// Cards render 140-190px wide, so w342 is already generous on a 2x display —
+// w500 was roughly 2.6x more image than any card can show, at twice the bytes.
+const CARD_SIZE = "w342";
+
 function cardHTML(item) {
   const hasArt = Boolean(item.poster);
   const cls = hasArt ? "card-art" : "card-art gen";
-  const bg = hasArt ? `url('${art(item.poster)}') center/cover` : genArt(item.title);
   return `
     <button class="card" data-key="${esc(key(item))}" data-id="${item.id}" data-media="${item.media}">
-      <div class="${cls}" style="background:${bg}">
-        ${hasArt ? "" : `<span>${esc(item.title)}</span>`}
+      <div class="${cls}"${hasArt ? "" : ` style="background:${genArt(item.title)}"`}>
+        ${hasArt
+          // A real <img> rather than a CSS background: background images cannot be
+          // lazy-loaded, so every card in a 30-item grid downloaded even the ~20
+          // below the fold.
+          ? `<img class="card-img" src="${esc(art(item.poster, CARD_SIZE))}" alt=""
+                  loading="lazy" decoding="async" />`
+          : `<span>${esc(item.title)}</span>`}
         ${item.score ? `<span class="card-score ${scoreClass(item.score)}">${item.score}</span>` : ""}
         <span class="card-save ${saved(item) ? "on" : ""}" data-save="1" title="Save to list">★</span>
       </div>
@@ -1079,8 +1088,12 @@ async function openBrowse(desc, { push = true } = {}) {
 // Waits for a page's artwork to decode, so the grid appears complete rather than
 // filling in. Capped: one dead CDN image must never hold the page hostage, and a
 // slow connection gets the grid at the cutoff rather than an indefinite spinner.
+const ABOVE_FOLD = 10;
+
 function preloadArt(items, { timeout = 6000 } = {}) {
-  const urls = items.map((i) => art(i.poster)).filter(Boolean);
+  // Only the first screenful. The rest are lazy <img>s that fetch as they scroll
+  // into view, so waiting on them would delay the page for pixels nobody sees.
+  const urls = items.slice(0, ABOVE_FOLD).map((i) => art(i.poster, CARD_SIZE)).filter(Boolean);
   if (!urls.length) return Promise.resolve();
 
   const settled = urls.map((src) => new Promise((done) => {
