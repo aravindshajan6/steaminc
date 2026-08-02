@@ -567,6 +567,39 @@ a.prov b { font-size: 9px; opacity: .7; }
   letter-spacing: .1em; color: var(--dim); text-transform: uppercase;
 }
 
+/* -------------------------------------------------------------- comments -- */
+
+.cmt-wrap { padding: 0 clamp(16px, 3.4vw, 34px) clamp(28px, 4vw, 40px); }
+
+.cmt-form { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; }
+.cmt-form textarea {
+  flex: 1; resize: vertical; min-height: 62px;
+  background: var(--ink); color: var(--paper); border: var(--edge);
+  padding: 11px 12px; font: 500 14px/1.5 var(--sans);
+}
+.cmt-form textarea:focus { outline: 3px solid var(--acid); outline-offset: 2px; }
+.cmt-form textarea::placeholder { color: var(--dim); }
+.cmt-signin { margin: 0 0 20px; }
+
+.cmt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.cmt {
+  border: 1px solid color-mix(in oklab, var(--paper) 20%, transparent);
+  border-left: 3px solid var(--acid);
+  padding: 12px 14px;
+}
+.cmt-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.cmt-who { font: 900 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--acid); }
+.cmt-when { font: 700 10px/1 var(--mono); color: var(--dim); }
+.cmt-del {
+  margin-left: auto; background: transparent; cursor: pointer;
+  border: 1px solid color-mix(in oklab, var(--paper) 30%, transparent);
+  color: var(--dim); font-size: 10px; padding: 3px 6px;
+}
+.cmt-del:hover { border-color: var(--magenta); color: var(--magenta); }
+/* Preserve the author's line breaks without letting a wall of text break layout. */
+.cmt-body { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmt-empty { font: 700 12px/1.6 var(--mono); color: var(--dim); letter-spacing: .06em; }
+
 /* ---------------------------------------------------------------- footer -- */
 
 .foot {

@@ -41,6 +41,7 @@ export class MongoStore {
     this.db = this.client.db(this.dbName);
     this.users = this.db.collection("users");
     this.sessions = this.db.collection("sessions");
+    this.comments = this.db.collection("comments");
 
     // Unique index does what the file store could not: make "one account per email"
     // a guarantee instead of a check-then-write race between two concurrent signups.
@@ -51,6 +52,11 @@ export class MongoStore {
     // to run and no way to forget to run it. Requires `expires` to be a Date.
     await this.sessions.createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
     await this.sessions.createIndex({ token: 1 }, { unique: true });
+
+    // Comments are always read as "everything for one title, newest first",
+    // so index exactly that rather than the two fields separately.
+    await this.comments.createIndex({ target: 1, created: -1 });
+    await this.comments.createIndex({ id: 1 }, { unique: true });
   }
 
   async close() {
@@ -115,6 +121,32 @@ export class MongoStore {
 
   async endSession(token) {
     if (token) await this.sessions.deleteOne({ token });
+  }
+
+  /* -------------------------------------------------------------- comments -- */
+
+  async listComments(target, limit = 100) {
+    return this.comments
+      .find({ target }, { projection: { _id: 0 } })
+      .sort({ created: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  async addComment(comment) {
+    await this.comments.insertOne({ ...comment });
+    return comment;
+  }
+
+  async deleteComment(id, userId) {
+    // userId in the filter IS the authorization check — a user can only ever
+    // delete their own comment, enforced by the query rather than by a branch.
+    const res = await this.comments.deleteOne({ id, userId });
+    return res.deletedCount > 0;
+  }
+
+  async countComments(userId) {
+    return this.comments.countDocuments({ userId });
   }
 
   async rename(userId, name) {
