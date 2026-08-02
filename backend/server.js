@@ -140,14 +140,29 @@ async function tmdb(path, params = {}) {
   if (IS_BEARER) headers.authorization = `Bearer ${CREDENTIAL}`;
   else url.searchParams.set("api_key", CREDENTIAL);
 
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(9000) });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw Object.assign(new Error(`TMDB ${res.status} on ${path}: ${body.slice(0, 200)}`), {
-      status: res.status,
-    });
+  // Connections to TMDB get reset intermittently from some networks — observed
+  // repeatedly as ECONNRESET mid-TLS while archive.org stayed reachable. Retrying
+  // transport failures turns a dropped row into a small delay. HTTP errors are NOT
+  // retried: a 401 or 404 will say the same thing the second time.
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(9000) });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw Object.assign(new Error(`TMDB ${res.status} on ${path}: ${body.slice(0, 200)}`), {
+          status: res.status,
+          http: true,
+        });
+      }
+      return await res.json();
+    } catch (err) {
+      if (err.http) throw err;
+      lastErr = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
   }
-  return res.json();
+  throw lastErr;
 }
 
 /* ------------------------------------------------------------ normalize --- */
@@ -228,6 +243,49 @@ const FEED_GENRES = [
   { key: "docs", label: "Documentaries", tag: "genre", media: "movie", genre: "99" },
   { key: "animation", label: "Animation", tag: "genre", media: "movie", genre: "16" },
 ];
+
+/* ------------------------------------------------------------ paged rows --- */
+
+const PER_PAGE = 30;
+
+// Every row on the homepage, addressable for full-page browsing.
+const ROW_SOURCES = {
+  trending: { label: "Trending Now", hint: null, get: (p) => tmdb("/trending/all/day", { page: p }) },
+  movies:   { label: "Popular Films", hint: "movie", get: (p) => tmdb("/movie/popular", { page: p }) },
+  tv:       { label: "Series People Binge", hint: "tv", get: (p) => tmdb("/tv/popular", { page: p }) },
+  top:      { label: "All-Time Highest Rated", hint: "movie", get: (p) => tmdb("/movie/top_rated", { page: p }) },
+  new:      { label: "In Theaters & Just Landed", hint: "movie", get: (p) => tmdb("/movie/now_playing", { page: p }) },
+  tvtop:    { label: "Series Worth Finishing", hint: "tv", get: (p) => tmdb("/tv/top_rated", { page: p }) },
+  soon:     { label: "Coming Soon", hint: "movie", get: (p) => tmdb("/movie/upcoming", { page: p }) },
+  ...Object.fromEntries(FEED_GENRES.map((g) => [
+    g.key,
+    { label: g.label, hint: g.media, get: (p) => discover(g.media, { genre: g.genre, page: p }) },
+  ])),
+};
+
+// TMDB pages at 20 and we show 30, so a page of ours straddles two of theirs.
+// Fetch both, then slice the exact window — the alternative is showing 20 and
+// pretending that was the intent.
+async function pagedRow(source, page) {
+  const start = (page - 1) * PER_PAGE;
+  const firstUpstream = Math.floor(start / 20) + 1;
+  const lastUpstream = Math.floor((start + PER_PAGE - 1) / 20) + 1;
+
+  const pages = [];
+  for (let p = firstUpstream; p <= lastUpstream; p++) pages.push(p);
+  const results = await Promise.all(pages.map((p) => source.get(p)));
+
+  const merged = results.flatMap((r) => r.results || []);
+  const offset = start - (firstUpstream - 1) * 20;
+  const total = results[0]?.total_results || 0;
+
+  return {
+    items: cardList({ results: merged.slice(offset, offset + PER_PAGE) }, source.hint),
+    // TMDB refuses pages past 500; cap well inside that.
+    totalPages: Math.max(1, Math.min(Math.ceil(total / PER_PAGE), 100)),
+    totalResults: total,
+  };
+}
 
 function genreList(media) {
   return cached(`genres:${media}`, 864e5, async () => (await tmdb(`/genre/${media}/list`)).genres || []);
@@ -325,6 +383,31 @@ const ROUTES = {
 
   async "/api/free"() {
     return freeRow();
+  },
+
+  // Full-page browse for any homepage row, 30 per page.
+  async "/api/row"(params) {
+    const key = params.get("key") || "";
+    const page = Math.min(Math.max(Number(params.get("page")) || 1, 1), 100);
+
+    if (key === "free") {
+      const items = await archiveSearch({ rows: PER_PAGE, page });
+      // The Archive reports no reliable total for this query shape, so paging
+      // continues while pages come back full rather than pretending to know.
+      return { key, label: "Free To Watch Right Now", page, perPage: PER_PAGE,
+               totalPages: items.length < PER_PAGE ? page : page + 1, items };
+    }
+
+    const source = ROW_SOURCES[key];
+    if (!source) throw Object.assign(new Error("No such row."), { status: 404 });
+    if (DEMO) {
+      return { key, label: source.label, page, perPage: PER_PAGE, totalPages: 1, items: demo().titles };
+    }
+
+    return cached(`row:${key}:${page}`, 6e5, async () => {
+      const { items, totalPages, totalResults } = await pagedRow(source, page);
+      return { key, label: source.label, page, perPage: PER_PAGE, totalPages, totalResults, items };
+    });
   },
 
   async "/api/genres"() {
