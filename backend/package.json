@@ -2,14 +2,15 @@
   "name": "steaminc-backend",
   "version": "2.1.0",
   "private": true,
-  "description": "STEAMINC API — TMDB + Internet Archive discovery, accounts, watchlists.",
+  "description": "STEAMINC API \u2014 TMDB + Internet Archive discovery, accounts, watchlists.",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js"
   },
   "//": "The ONLY dependency, and only needed if you set MONGODB_URI. It is imported dynamically, so with file storage the app still runs from a fresh clone with no npm install.",
   "optionalDependencies": {

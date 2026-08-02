@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install step: the suite covers the dependency-free modules, and the
+      # only dependency (mongodb) is optional and dynamically imported.
+      - name: Run tests
+        run: npm test
+
+  syntax:
+    name: Syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Catches the class of error that has actually bitten this project: a bad
+      # edit leaving a file unparseable, which would otherwise only surface when
+      # the container failed to boot.
+      - name: Parse every source file
+        run: |
+          for f in backend/*.js frontend/public/app.js; do
+            node --check "$f" || exit 1
+          done
+          echo "all source files parse"
+
+  smoke:
+    name: Build images and smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No TMDB key in CI, so the app boots in demo mode on bundled data. That is
+      # the point: it proves the fallback path works for anyone cloning this.
+      - name: Build and start the stack
+        run: docker compose up --build -d
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8080/api/health > /dev/null; then
+              echo "healthy after ${i}0s"; exit 0
+            fi
+            sleep 10
+          done
+          echo "never became healthy"; docker compose logs; exit 1
+
+      - name: Smoke-test the routes
+        run: |
+          fail=0
+          check() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "http://localhost:8080$1")
+            if [ "$code" != "$2" ]; then echo "FAIL $1 -> $code (want $2)"; fail=1;
+            else echo "ok   $1 -> $code"; fi
+          }
+          check /                                  200
+          check /app.js                            200
+          check /styles.css                        200
+          check /api/health                        200
+          check /api/config                        200
+          check /api/feed                          200
+          check /api/auth/me                       200
+          check /api/row?key=nonsense              404
+          exit $fail
+
+      - name: Security headers are present on the proxied path
+        run: |
+          h=$(curl -sI http://localhost:8080/api/health)
+          echo "$h" | grep -qi 'x-content-type-options: nosniff' || { echo "missing nosniff"; exit 1; }
+          echo "$h" | grep -qi 'x-frame-options' || { echo "missing x-frame-options"; exit 1; }
+          # Regression guard: nginx and the backend both set these, and the proxy
+          # must hide the upstream copies so each appears exactly once.
+          [ "$(echo "$h" | grep -ci '^x-frame-options')" = "1" ] || { echo "duplicated header"; exit 1; }
+          echo "headers correct, no duplicates"
+
+      - name: The backend must NOT be reachable from the host
+        run: |
+          if curl -fs --max-time 5 http://localhost:5173/api/health > /dev/null; then
+            echo "FAIL: backend port is published"; exit 1
+          fi
+          echo "ok: backend is not published"
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
