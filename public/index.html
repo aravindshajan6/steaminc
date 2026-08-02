@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>STEAMINC — where to watch, legally, loudly</title>
+<meta name="description" content="A very loud streaming discovery deck. Search everything, then find out which service actually has it in your country." />
+<link rel="stylesheet" href="/styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307060c'/%3E%3Ctext y='24' x='16' font-size='22' text-anchor='middle' fill='%23ccff00' font-family='monospace' font-weight='bold'%3ES%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+<!-- ============================== ambient fx ============================== -->
+<div class="fx" aria-hidden="true">
+  <div class="fx-mesh"></div>
+  <div class="fx-spot" id="spot"></div>
+  <div class="fx-scan"></div>
+  <div class="fx-grain"></div>
+</div>
+
+<!-- ================================ ticker ================================ -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track" id="ticker"></div>
+</div>
+
+<!-- ================================ header ================================ -->
+<header class="bar">
+  <a class="brand" href="/" aria-label="STEAMINC home">
+    <span class="brand-mark">▚</span>
+    <span class="brand-word glitch" data-text="STEAMINC">STEAMINC</span>
+    <span class="brand-sub">no piracy · just pointers</span>
+  </a>
+
+  <nav class="bar-tools">
+    <button class="btn btn-search" id="openSearch">
+      <span class="btn-ic">⌕</span>
+      <span class="btn-label">Search everything</span>
+      <kbd>/</kbd>
+    </button>
+
+    <label class="field">
+      <span class="field-cap">Region</span>
+      <select id="region" aria-label="Watch provider region"></select>
+    </label>
+
+    <button class="btn btn-ghost" id="openList" aria-pressed="false">
+      ★ <span class="btn-label">List</span><span class="pill" id="listCount">0</span>
+    </button>
+
+    <button class="btn btn-ghost" id="chill" aria-pressed="false" title="Cut the motion and noise">
+      ◐ <span class="btn-label">Chill</span>
+    </button>
+
+    <button class="btn btn-ghost" id="account">◉ <span class="btn-label" id="accountLabel">Sign in</span></button>
+  </nav>
+</header>
+
+<!-- ================================= hero ================================= -->
+<section class="hero" id="hero" hidden>
+  <div class="hero-art" id="heroArt"></div>
+  <div class="hero-body">
+    <div class="hero-flag" id="heroFlag">▶ TOP OF THE PILE</div>
+    <h1 class="hero-title glitch" id="heroTitle" data-text=""></h1>
+    <p class="hero-meta" id="heroMeta"></p>
+    <p class="hero-blurb" id="heroBlurb"></p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" id="heroOpen">Where can I watch this →</button>
+      <button class="btn btn-ghost" id="heroSave">★ Save it</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================================= rows ================================= -->
+<main id="rows" class="rows"></main>
+
+<!-- =============================== footer ================================= -->
+<footer class="foot">
+  <p class="foot-big">STEAMINC POINTS. IT DOES NOT HOST.</p>
+  <p>
+    Metadata from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.
+    Availability from <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>.
+    This product uses the TMDB API but is not endorsed or certified by TMDB.
+  </p>
+  <p class="foot-dim">Every link here goes to a licensed service. That is the whole point.</p>
+</footer>
+
+<!-- =============================== search ================================= -->
+<div class="overlay" id="searchWrap" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Search">
+    <div class="palette-in">
+      <span class="palette-ic">⌕</span>
+      <input id="q" type="search" placeholder="Type a film, a show, a half-remembered title…" autocomplete="off" spellcheck="false" />
+      <button class="x" id="closeSearch" aria-label="Close search">esc</button>
+    </div>
+    <div class="palette-out" id="results"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- =============================== detail ================================= -->
+<div class="overlay" id="sheetWrap" hidden>
+  <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <button class="sheet-x" id="closeSheet" aria-label="Close">✕</button>
+    <div class="sheet-body" id="sheetBody"></div>
+  </article>
+</div>
+
+<!-- ================================ account =============================== -->
+<div class="overlay" id="authWrap" hidden>
+  <form class="auth" id="authForm" novalidate>
+    <button type="button" class="x auth-x" id="closeAuth" aria-label="Close">esc</button>
+
+    <h2 class="auth-title glitch" id="authTitle" data-text="SIGN IN">SIGN IN</h2>
+    <p class="auth-sub" id="authSub">Your list stops living in this browser and starts following you.</p>
+
+    <div id="authFields">
+      <label class="auth-field" id="nameField" hidden>
+        <span>Name</span>
+        <input id="authName" maxlength="60" autocomplete="name" placeholder="What should we call you?" />
+      </label>
+      <label class="auth-field">
+        <span>Email</span>
+        <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" />
+      </label>
+      <label class="auth-field">
+        <span>Password</span>
+        <input id="authPassword" type="password" minlength="8" autocomplete="current-password" placeholder="At least 8 characters" />
+      </label>
+    </div>
+
+    <div id="authAccount" hidden>
+      <p class="auth-who">Signed in as <b id="authWho"></b></p>
+    </div>
+
+    <p class="auth-error" id="authError" hidden role="alert"></p>
+
+    <button class="btn btn-primary auth-go" id="authGo" type="submit">Sign in →</button>
+
+    <p class="auth-swap">
+      <span id="authSwapText">No account yet?</span>
+      <button type="button" id="authSwap">Create one</button>
+    </p>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
