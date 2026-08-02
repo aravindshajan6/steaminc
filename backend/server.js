@@ -215,6 +215,34 @@ function freeRow() {
   }));
 }
 
+/* ------------------------------------------------------------- categories --- */
+
+// TMDB genre ids are stable, so these can be hard-coded. Hand-picked rather than
+// "every genre" — a wall of thirty rows is worse than eight good ones.
+const FEED_GENRES = [
+  { key: "action", label: "Action & Adventure", tag: "genre", media: "movie", genre: "28,12" },
+  { key: "comedy", label: "Comedy", tag: "genre", media: "movie", genre: "35" },
+  { key: "horror", label: "Horror & Thriller", tag: "genre", media: "movie", genre: "27,53" },
+  { key: "scifi", label: "Sci-Fi & Fantasy", tag: "genre", media: "movie", genre: "878,14" },
+  { key: "docs", label: "Documentaries", tag: "genre", media: "movie", genre: "99" },
+  { key: "animation", label: "Animation", tag: "genre", media: "movie", genre: "16" },
+];
+
+function genreList(media) {
+  return cached(`genres:${media}`, 864e5, async () => (await tmdb(`/genre/${media}/list`)).genres || []);
+}
+
+function discover(media, { genre, page = 1, sort = "popularity.desc" } = {}) {
+  return tmdb(`/discover/${media}`, {
+    with_genres: genre,
+    sort_by: sort,
+    page,
+    include_adult: "false",
+    // Without a vote floor, "top rated" surfaces obscure titles with three votes.
+    "vote_count.gte": sort.startsWith("vote_average") ? 300 : 40,
+  });
+}
+
 // One round-trip per row, all in flight at once. A row that fails is dropped
 // rather than failing the whole page.
 function tmdbFeed() {
@@ -225,6 +253,10 @@ function tmdbFeed() {
       ["tv", "Series People Binge", "tv", tmdb("/tv/popular"), "tv"],
       ["top", "All-Time Highest Rated", "top", tmdb("/movie/top_rated"), "movie"],
       ["new", "In Theaters & Just Landed", "new", tmdb("/movie/now_playing"), "movie"],
+      ["tvtop", "Series Worth Finishing", "tv", tmdb("/tv/top_rated"), "tv"],
+      ["soon", "Coming Soon", "new", tmdb("/movie/upcoming"), "movie"],
+      // Genre rows ride the same fan-out, so they cost no extra wall-clock.
+      ...FEED_GENRES.map((g) => [g.key, g.label, g.tag, discover(g.media, { genre: g.genre }), g.media]),
     ];
     const settled = await Promise.allSettled(jobs.map((j) => j[3]));
     const rows = [];
@@ -292,6 +324,38 @@ const ROUTES = {
 
   async "/api/free"() {
     return freeRow();
+  },
+
+  async "/api/genres"() {
+    if (DEMO) {
+      return { movie: FEED_GENRES.map((g) => ({ id: g.genre, name: g.label })), tv: [] };
+    }
+    const [movie, tv] = await Promise.all([
+      genreList("movie").catch(() => []),
+      genreList("tv").catch(() => []),
+    ]);
+    return { movie, tv };
+  },
+
+  // Browse one category. Paged, because a genre has far more than one screenful.
+  async "/api/category"(params) {
+    const media = params.get("media") === "tv" ? "tv" : "movie";
+    const genre = (params.get("genre") || "").replace(/[^\d,]/g, "");
+    const page = Math.min(Math.max(Number(params.get("page")) || 1, 1), 20);
+    const sort = ["popularity.desc", "vote_average.desc", "primary_release_date.desc", "revenue.desc"]
+      .includes(params.get("sort")) ? params.get("sort") : "popularity.desc";
+
+    if (DEMO) {
+      return { media, genre, page, totalPages: 1, items: demo().titles.filter((t) => t.media === media) };
+    }
+    return cached(`cat:${media}:${genre}:${sort}:${page}`, 6e5, async () => {
+      const data = await discover(media, { genre, page, sort });
+      return {
+        media, genre, page, sort,
+        totalPages: Math.min(data.total_pages || 1, 20),
+        items: cardList(data, media),
+      };
+    });
   },
 
   // Container healthcheck. Deliberately touches no upstream: this reports whether

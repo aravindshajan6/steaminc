@@ -550,6 +550,13 @@ function routeFromHash() {
     return openSheet(t[1], id, false);
   }
 
+  const cat = location.hash.match(/^#\/c\/(movie|tv)\/([\d,]+)$/);
+  if (cat) {
+    if (state.cat && state.cat.genre === cat[2]) return;
+    return openCategory(cat[1], cat[2], { push: false });
+  }
+  if (state.cat && !location.hash.startsWith("#/c/")) closeCategory();
+
   const auth = location.hash.match(/^#\/(signin|signup)$/);
   if (auth) {
     return openAuth(state.user ? "account" : auth[1] === "signup" ? "up" : "in");
@@ -710,6 +717,106 @@ function renderSheet(d) {
   $("#sheetWrap").scrollTop = 0;
 }
 
+/* ------------------------------------------------------------- categories -- */
+
+const SORTS = [
+  ["popularity.desc", "Most popular"],
+  ["vote_average.desc", "Highest rated"],
+  ["primary_release_date.desc", "Newest first"],
+  ["revenue.desc", "Biggest hits"],
+];
+
+function renderCats(genres) {
+  const movie = (genres?.movie || []).slice(0, 14);
+  if (!movie.length) return;
+  $("#cats").innerHTML =
+    `<button class="cat home" data-home="1" aria-current="${!state.cat}">◀ Home</button>` +
+    `<span class="cat-sep"></span>` +
+    movie.map((g) =>
+      `<button class="cat" data-genre="${esc(g.id)}" data-name="${esc(g.name)}"
+        aria-current="${state.cat?.genre === String(g.id)}">${esc(g.name)}</button>`).join("");
+
+  $("#cats").querySelectorAll(".cat").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (b.dataset.home) return closeCategory();
+      location.hash = `/c/movie/${b.dataset.genre}`;
+    }));
+}
+
+function markCat() {
+  $("#cats").querySelectorAll(".cat").forEach((b) => {
+    b.setAttribute("aria-current",
+      String(b.dataset.home ? !state.cat : state.cat?.genre === b.dataset.genre));
+  });
+}
+
+async function openCategory(media, genre, { sort = "popularity.desc", push = true } = {}) {
+  const name = $(`#cats .cat[data-genre="${CSS.escape(genre)}"]`)?.dataset.name || "Category";
+  state.cat = { media, genre: String(genre), sort, page: 1, name, items: [] };
+  if (push) location.hash = `/c/${media}/${genre}`;
+
+  $("#hero").hidden = true;          // the carousel is a homepage thing
+  clearTimeout(state.heroTimer);
+  markCat();
+  $("#rows").innerHTML = `<div class="cat-head"><h2 class="cat-title">${esc(name)}</h2></div>
+    <div class="grid">${skelCard.repeat(12)}</div>`;
+  window.scrollTo({ top: 0, behavior: "instant" });
+
+  await loadCategoryPage(true);
+}
+
+async function loadCategoryPage(first = false) {
+  const c = state.cat;
+  if (!c) return;
+  try {
+    const data = await api("/api/category", { media: c.media, genre: c.genre, page: c.page, sort: c.sort });
+    c.items = first ? data.items : [...c.items, ...data.items];
+    c.totalPages = data.totalPages || 1;
+    renderCategory();
+  } catch {
+    $("#rows").innerHTML = `<div class="notice">Could not load that category. Try another.</div>`;
+  }
+}
+
+function renderCategory() {
+  const c = state.cat;
+  if (!c) return;
+  const more = c.page < c.totalPages;
+  $("#rows").innerHTML = `
+    <div class="cat-head">
+      <h2 class="cat-title glitch" data-text="${esc(c.name)}">${esc(c.name)}</h2>
+      <span class="row-tag">${c.items.length} titles</span>
+      <select class="cat-sort" id="catSort" aria-label="Sort">
+        ${SORTS.map(([v, l]) => `<option value="${v}"${v === c.sort ? " selected" : ""}>${l}</option>`).join("")}
+      </select>
+    </div>
+    <div class="grid">${c.items.map(cardHTML).join("")}</div>
+    ${more ? `<div class="more-wrap"><button class="btn" id="loadMore">Load more →</button></div>` : ""}`;
+
+  wireCards();
+  $("#catSort").onchange = (e) => {
+    c.sort = e.target.value;
+    c.page = 1;
+    loadCategoryPage(true);
+  };
+  const btn = $("#loadMore");
+  if (btn) btn.onclick = async () => {
+    btn.textContent = "Loading…";
+    btn.disabled = true;
+    c.page += 1;
+    await loadCategoryPage(false);
+  };
+}
+
+function closeCategory() {
+  if (!state.cat) return;
+  state.cat = null;
+  if (location.hash.startsWith("#/c/")) history.pushState("", document.title, location.pathname);
+  markCat();
+  startHeroCarousel(state.feed?.heroes?.length ? state.feed.heroes : [state.feed?.hero]);
+  renderRows();
+}
+
 /* ---------------------------------------------------------------- regions -- */
 
 // TMDB returns 200+ countries alphabetically, which buries the handful anyone
@@ -768,11 +875,13 @@ async function boot() {
   // Paint the shape of the page before any request lands.
   $("#rows").innerHTML = skeletonScreen();
 
-  const [config, feed, me] = await Promise.all([
+  const [config, feed, me, genres] = await Promise.all([
     api("/api/config").catch(() => state.config),
     api("/api/feed").catch(() => null),
     api("/api/auth/me").catch(() => ({ user: null, list: null })),
+    api("/api/genres").catch(() => ({ movie: [], tv: [] })),
   ]);
+  renderCats(genres);
 
   if (me.user) {
     state.user = me.user;

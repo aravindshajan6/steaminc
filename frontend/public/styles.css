@@ -201,6 +201,52 @@ kbd {
 .field select optgroup { background: var(--ink); color: var(--dim); font-style: normal; }
 .field select option { background: var(--ink-2); color: var(--paper); }
 
+/* ------------------------------------------------------------ categories -- */
+
+.cats {
+  position: relative; z-index: 20;
+  display: flex; gap: 8px; align-items: center;
+  padding: 12px clamp(14px, 4vw, 40px);
+  border-bottom: var(--edge);
+  background: color-mix(in oklab, var(--ink) 84%, transparent);
+  overflow-x: auto; scrollbar-width: none;
+}
+.cats::-webkit-scrollbar { display: none; }
+.cats:empty { display: none; }
+
+.cat {
+  flex: 0 0 auto;
+  font: 800 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--paper); background: transparent;
+  border: 1px solid color-mix(in oklab, var(--paper) 32%, transparent);
+  padding: 9px 12px; cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.cat:hover { border-color: var(--acid); color: var(--acid); }
+.cat[aria-current="true"] { background: var(--acid); border-color: var(--acid); color: var(--ink); }
+.cat.home { border-color: var(--magenta); color: var(--magenta); }
+.cat.home[aria-current="true"] { background: var(--magenta); border-color: var(--magenta); color: var(--paper); }
+.cat-sep { flex: 0 0 auto; width: 1px; height: 22px; background: color-mix(in oklab, var(--paper) 25%, transparent); margin: 0 4px; }
+
+/* Category browse view — a grid, not a row, because you came here to dig. */
+.cat-head {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 0 clamp(14px, 4vw, 40px) 18px;
+}
+.cat-title { font: 900 clamp(26px, 5vw, 52px)/1 var(--sans); letter-spacing: -.045em; text-transform: uppercase; margin: 0; }
+.cat-sort {
+  font: 800 10px/1 var(--mono); letter-spacing: .1em;
+  background: var(--ink-2); color: var(--paper); border: var(--edge);
+  padding: 8px 10px; cursor: pointer; margin-left: auto;
+}
+.grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 16vw, 190px), 1fr));
+  padding: 0 clamp(14px, 4vw, 40px) 30px;
+}
+.grid .card { width: auto; }
+.more-wrap { display: flex; justify-content: center; padding: 0 0 60px; }
+
 /* ------------------------------------------------------------------ hero -- */
 
 .hero {
