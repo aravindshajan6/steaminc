@@ -1,0 +1,17 @@
+# Build context for the single-service (Render/Fly) image.
+.git
+.github
+node_modules
+*.log
+
+# Never let secrets or local account data into an image layer.
+.env
+.env.local
+**/accounts.json
+**/accounts.json.tmp
+
+# The split-image files are not used by this build.
+docker-compose.yml
+backend/Dockerfile
+frontend/Dockerfile
+frontend/nginx.conf

@@ -228,9 +228,29 @@ way to provide:
 You could publish a cut-down static build to Pages — catalog browsing only, key exposed in the
 client, no accounts, no watchlist sync — but that is a different, worse app.
 
-What does work, since the whole thing is now a compose file: anywhere that runs containers.
-**Fly.io**, **Render**, **Railway** and any small VPS all take this as-is. Two changes when you
-put it on a real host:
+### Render free tier
+
+Yes, with one structural change and one real caveat.
+
+**The change:** free web services can't receive private network traffic, so the nginx→backend
+split can't work there — nginx would have no private way to reach the API. Use the root
+[Dockerfile](Dockerfile) instead, which runs a single container where node serves the UI itself
+(the same fallback that makes bare `npm start` work). [render.yaml](render.yaml) is a ready
+blueprint: point Render at the repo, set `TMDB_API_KEY` in the dashboard, deploy.
+
+**The caveat:** free services get no persistent disk, so `/app/state` is ephemeral. **Accounts
+and watchlists are wiped on every deploy and every spin-down.** Discovery, search, watch
+providers and the Archive player all work fine — only the account system is affected. If you
+want durable accounts, either move to a paid instance with a disk, or port `auth.js` from its
+JSON file to Render's managed Postgres.
+
+Also expect the service to spin down after 15 minutes of no traffic and take about a minute to
+wake. The health check does not prevent this; only inbound traffic does.
+
+### Anywhere else
+
+Since the whole thing is a compose file, any VPS runs the proper split setup as-is. Fly.io and
+Railway take the single-service `Dockerfile`. Two changes when you put it on a real host:
 
 - Publish the frontend on `0.0.0.0` instead of `127.0.0.1` (drop the prefix in `docker-compose.yml`),
   and terminate TLS in front of it.

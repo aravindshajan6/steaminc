@@ -1,0 +1,27 @@
+# Render blueprint — one free web service running the single-service Dockerfile.
+#
+# Free plan realities this config lives with:
+#   * No persistent disk. There is deliberately no `disk:` block, because free
+#     services cannot attach one. Accounts and sessions are wiped on every deploy
+#     and every spin-down. Fine for a demo, not for real users.
+#   * Spins down after 15 minutes with no traffic; the next request waits ~1 minute
+#     while it wakes. The health check below does NOT keep it awake — only inbound
+#     traffic does.
+#   * Free services cannot receive private network traffic, which is why this is one
+#     service and not the nginx + backend split in docker-compose.yml.
+
+services:
+  - type: web
+    name: steaminc
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # sync: false means "prompt me in the dashboard" — the key is never written
+      # to this file and never reaches the repo.
+      - key: TMDB_API_KEY
+        sync: false
+      - key: DEFAULT_REGION
+        value: US
