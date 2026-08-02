@@ -125,6 +125,7 @@ function toggleSave(item) {
   else { state.list.unshift({ id: item.id, media: item.media, title: item.title, poster: item.poster, year: item.year, score: item.score }); toast("saved to list"); }
   persistList();
   $("#listCount").textContent = state.list.length;
+  markCat();
   document.querySelectorAll(`[data-key="${CSS.escape(k)}"] .card-save`).forEach((b) => b.classList.toggle("on", saved(item)));
   if (state.listOpen) renderRows();
 }
@@ -973,32 +974,74 @@ const SORTS = [
   ["revenue.desc", "Biggest hits"],
 ];
 
+// Quick links sit above the genres — the things people reach for most often,
+// which are not genres at all.
+const RAIL_QUICK = [
+  { id: "home",  ic: "◀", label: "Home" },
+  { id: "free",  ic: "▶", label: "Free To Watch", hot: true },
+  { id: "trending", ic: "◆", label: "Trending Now" },
+  { id: "top",   ic: "★", label: "Highest Rated" },
+  { id: "tv",    ic: "▤", label: "Series" },
+  { id: "list",  ic: "☰", label: "Your List" },
+];
+
 function renderCats(genres) {
-  const movie = (genres?.movie || []).slice(0, 14);
-  if (!movie.length) return;
-  $("#cats").innerHTML =
-    `<button class="cat home" data-home="1" aria-current="${!state.browse}">◀ Home</button>` +
-    `<span class="cat-sep"></span>` +
-    movie.map((g) =>
-      `<button class="cat" data-genre="${esc(g.id)}" data-name="${esc(g.name)}"
-        aria-current="${state.browse?.genre === String(g.id)}">${esc(g.name)}</button>`).join("");
+  const movie = (genres?.movie || []).slice(0, 18);
 
-  $("#cats").querySelectorAll(".cat").forEach((b) =>
+  $("#railQuick").innerHTML = RAIL_QUICK.map((q) => `
+    <button class="rail-item ${q.hot ? "hot" : ""}" data-quick="${q.id}">
+      <span class="ic">${q.ic}</span>${esc(q.label)}
+      ${q.id === "list" ? `<span class="n" id="railListCount">${state.list.length}</span>` : ""}
+    </button>`).join("");
+
+  $("#railGenres").innerHTML = movie.map((g, i) => `
+    <button class="rail-item" data-genre="${esc(g.id)}" data-name="${esc(g.name)}">
+      <span class="ic">${String(i + 1).padStart(2, "0")}</span>${esc(g.name)}
+    </button>`).join("");
+
+  $("#railQuick").querySelectorAll("[data-quick]").forEach((b) =>
     b.addEventListener("click", () => {
-      if (b.dataset.home) return closeBrowse();
-      location.hash = `/c/movie/${b.dataset.genre}`;
+      const id = b.dataset.quick;
+      if (id === "home") closeBrowse();
+      else if (id === "list") { state.listOpen = true; closeBrowse(); renderRows(); }
+      else location.hash = `/r/${id}/1`;
+      if (!matchMedia("(min-width: 1280px)").matches) setRail(false);
     }));
+
+  $("#railGenres").querySelectorAll("[data-genre]").forEach((b) =>
+    b.addEventListener("click", () => {
+      location.hash = `/c/movie/${b.dataset.genre}/1`;
+      if (!matchMedia("(min-width: 1280px)").matches) setRail(false);
+    }));
+
+  markCat();
 }
 
+// Reflects wherever the user currently is, whichever route took them there.
 function markCat() {
-  $("#cats").querySelectorAll(".cat").forEach((b) => {
-    b.setAttribute("aria-current",
-      String(b.dataset.home ? !state.browse : state.browse?.genre === b.dataset.genre));
+  const b = state.browse;
+  document.querySelectorAll("#railGenres [data-genre]").forEach((el) =>
+    el.setAttribute("aria-current", String(b?.kind === "genre" && b.genre === el.dataset.genre)));
+  document.querySelectorAll("#railQuick [data-quick]").forEach((el) => {
+    const id = el.dataset.quick;
+    const on = id === "home" ? !b && !state.listOpen
+      : id === "list" ? Boolean(state.listOpen)
+      : b?.kind === "row" && b.key === id;
+    el.setAttribute("aria-current", String(on));
   });
+  const n = $("#railListCount");
+  if (n) n.textContent = state.list.length;
 }
 
-// One browse view serves both kinds of listing: a homepage row expanded in full,
-// and a genre. They differ only in which endpoint fills the grid.
+function setRail(open) {
+  document.documentElement.classList.toggle("rail-open", open);
+  $("#railToggle").setAttribute("aria-expanded", String(open));
+  $("#railVeil").hidden = !open || matchMedia("(min-width: 1280px)").matches;
+  localStorage.setItem("sc:rail", open ? "1" : "0");
+}
+
+const railOpen = () => document.documentElement.classList.contains("rail-open");
+
 async function openBrowse(desc, { push = true } = {}) {
   state.browse = { page: 1, sort: "popularity.desc", items: [], ...desc };
   const b = state.browse;
@@ -1218,6 +1261,8 @@ async function boot() {
     api("/api/genres").catch(() => ({ movie: [], tv: [] })),
   ]);
   renderCats(genres);
+  const savedRail = localStorage.getItem("sc:rail");
+  setRail(savedRail === null ? matchMedia("(min-width: 1280px)").matches : savedRail === "1");
 
   if (me.user) {
     state.user = me.user;
@@ -1271,6 +1316,9 @@ for (const ev of ["pointerleave", "focusout"]) {
   });
 }
 
+$("#railToggle").onclick = () => setRail(!railOpen());
+$("#railVeil").onclick = () => setRail(false);
+
 $("#account").onclick = () => openAuth(state.user ? "account" : "in");
 $("#closeAuth").onclick = closeAuth;
 $("#authForm").addEventListener("submit", submitAuth);
@@ -1304,6 +1352,8 @@ document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if (e.key === "Escape") {
     if (!$("#authWrap").hidden) return closeAuth();
+    if (railOpen() && !matchMedia("(min-width: 1280px)").matches
+        && $("#searchWrap").hidden && $("#sheetWrap").hidden) return setRail(false);
     if (!$("#searchWrap").hidden) return closeSearch();
     if (!$("#sheetWrap").hidden) return closeSheet();
   }

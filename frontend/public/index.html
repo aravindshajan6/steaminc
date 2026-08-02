@@ -43,6 +43,11 @@
 
 <!-- ================================ header ================================ -->
 <header class="bar">
+  <button class="rail-toggle" id="railToggle" aria-expanded="false" aria-controls="rail" title="Browse categories">
+    <span class="rail-bars"><i></i><i></i><i></i></span>
+    <span class="btn-label">Browse</span>
+  </button>
+
   <a class="brand" href="/" aria-label="STEAMINC home">
     <span class="brand-mark">▚</span>
     <span class="brand-word glitch" data-text="STEAMINC">STEAMINC</span>
@@ -74,7 +79,24 @@
 </header>
 
 <!-- =============================== categories ============================= -->
-<nav class="cats" id="cats" aria-label="Browse by category"></nav>
+<aside class="rail" id="rail" aria-label="Browse">
+  <div class="rail-spine" aria-hidden="true"><span>BROWSE</span></div>
+
+  <div class="rail-inner">
+    <p class="rail-cap">Jump to</p>
+    <nav class="rail-nav" id="railQuick"></nav>
+
+    <p class="rail-cap">Genres</p>
+    <nav class="rail-nav" id="railGenres"></nav>
+
+    <p class="rail-foot">
+      <span class="rail-dot"></span>
+      <span id="railStatus">catalog live</span>
+    </p>
+  </div>
+</aside>
+
+<div class="rail-veil" id="railVeil" hidden></div>
 
 <!-- ================================= hero ================================= -->
 <section class="hero" id="hero" hidden>

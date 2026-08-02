@@ -279,78 +279,118 @@ html.chill .cube-shadow, .splash.still .cube-shadow { animation: none; }
 .field select optgroup { background: var(--ink); color: var(--dim); font-style: normal; }
 .field select option { background: var(--ink-2); color: var(--paper); }
 
-/* ------------------------------------------------------------ categories -- */
+/* -------------------------------------------------------------- rail (nav) -- */
+/* A drawer below 1280px, a pinned column above it. Same markup either way —
+   only the transform and the body offset change. */
 
-.cats {
-  position: relative; z-index: 20;
-  display: flex; gap: 8px; align-items: center;
-  padding: 12px clamp(14px, 4vw, 40px);
-  border-bottom: var(--edge);
-  background: color-mix(in oklab, var(--ink) 84%, transparent);
-  overflow-x: auto; scrollbar-width: none;
-}
-.cats::-webkit-scrollbar { display: none; }
-.cats:empty { display: none; }
+:root { --rail-w: 268px; }
 
-.cat {
-  flex: 0 0 auto;
-  font: 800 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
-  color: var(--paper); background: transparent;
-  border: 1px solid color-mix(in oklab, var(--paper) 32%, transparent);
-  padding: 9px 12px; cursor: pointer; white-space: nowrap;
-  transition: background .15s, color .15s, border-color .15s;
-}
-.cat:hover { border-color: var(--acid); color: var(--acid); }
-.cat[aria-current="true"] { background: var(--acid); border-color: var(--acid); color: var(--ink); }
-.cat.home { border-color: var(--magenta); color: var(--magenta); }
-.cat.home[aria-current="true"] { background: var(--magenta); border-color: var(--magenta); color: var(--paper); }
-.cat-sep { flex: 0 0 auto; width: 1px; height: 22px; background: color-mix(in oklab, var(--paper) 25%, transparent); margin: 0 4px; }
-
-/* Category browse view — a grid, not a row, because you came here to dig. */
-.cat-head {
-  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  padding: 0 clamp(14px, 4vw, 40px) 18px;
-}
-.cat-title { font: 900 clamp(26px, 5vw, 52px)/1 var(--sans); letter-spacing: -.045em; text-transform: uppercase; margin: 0; }
-.cat-sort {
-  font: 800 10px/1 var(--mono); letter-spacing: .1em;
-  background: var(--ink-2); color: var(--paper); border: var(--edge);
-  padding: 8px 10px; cursor: pointer; margin-left: auto;
-}
-.grid {
-  display: grid; gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 16vw, 190px), 1fr));
-  padding: 0 clamp(14px, 4vw, 40px) 30px;
-}
-.grid .card { width: auto; }
-.more-wrap { display: flex; justify-content: center; padding: 0 0 60px; }
-
-/* "View all" sits at the end of a row heading, opposite the title. */
-.view-all {
-  flex: 0 0 auto; margin-left: auto;
-  font: 800 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
-  background: transparent; color: var(--acid);
-  border: 1px solid var(--acid); padding: 8px 11px; cursor: pointer;
+.rail-toggle {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: transparent; color: var(--paper);
+  border: var(--edge); padding: 11px 13px; cursor: pointer;
+  font: 800 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
   transition: background .15s, color .15s;
 }
-.view-all:hover { background: var(--acid); color: var(--ink); }
+.rail-toggle:hover { background: var(--acid); color: var(--ink); }
+.rail-bars { display: grid; gap: 3px; width: 15px; }
+.rail-bars i { height: 2px; background: currentColor; transition: transform .22s, width .22s; }
+.rail-bars i:nth-child(2) { width: 70%; }
+/* Bars converge into an arrow when open — the control says "close" without words. */
+html.rail-open .rail-bars i:nth-child(1) { transform: translateY(5px) rotate(-45deg); width: 60%; }
+html.rail-open .rail-bars i:nth-child(2) { opacity: 0; }
+html.rail-open .rail-bars i:nth-child(3) { transform: translateY(-5px) rotate(45deg); width: 60%; }
 
-/* Numbered pager. Windowed, so 100 pages never means 100 buttons. */
-.pager {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center;
-  padding: 10px clamp(14px, 4vw, 40px) 64px;
+.rail {
+  position: fixed; z-index: 60;
+  top: 0; left: 0; bottom: 0; width: var(--rail-w);
+  display: flex;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink) 60%);
+  border-right: var(--edge);
+  transform: translateX(-100%);
+  transition: transform .3s cubic-bezier(.3,.9,.3,1);
+  overflow: hidden;
 }
-.pager button {
-  font: 800 11px/1 var(--mono); letter-spacing: .08em;
-  background: transparent; color: var(--paper);
-  border: 1px solid color-mix(in oklab, var(--paper) 30%, transparent);
-  padding: 9px 12px; cursor: pointer; min-width: 38px;
-  transition: background .15s, color .15s, border-color .15s;
+html.rail-open .rail { transform: none; }
+
+/* Vertical wordmark down the left edge. Pure decoration, hidden from the a11y tree. */
+.rail-spine {
+  flex: 0 0 30px;
+  border-right: 1px solid color-mix(in oklab, var(--paper) 18%, transparent);
+  background: color-mix(in oklab, var(--violet) 22%, transparent);
+  display: grid; place-items: center;
 }
-.pager button:hover:not(:disabled) { border-color: var(--acid); color: var(--acid); }
-.pager button[aria-current="true"] { background: var(--acid); border-color: var(--acid); color: var(--ink); }
-.pager button:disabled { opacity: .35; cursor: not-allowed; }
-.pg-gap { color: var(--dim); font: 700 11px var(--mono); padding: 0 2px; }
+.rail-spine span {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font: 900 10px/1 var(--mono); letter-spacing: .5em;
+  color: var(--acid); text-transform: uppercase;
+}
+
+.rail-inner { flex: 1; overflow-y: auto; padding: 22px 16px 20px; scrollbar-width: thin; scrollbar-color: var(--magenta) transparent; }
+.rail-inner::-webkit-scrollbar { width: 6px; }
+.rail-inner::-webkit-scrollbar-thumb { background: var(--magenta); }
+
+.rail-cap {
+  font: 800 8px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase;
+  color: var(--dim); margin: 0 0 10px; padding-left: 2px;
+}
+.rail-cap:not(:first-child) { margin-top: 26px; }
+
+.rail-nav { display: grid; gap: 3px; }
+
+.rail-item {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left; cursor: pointer;
+  background: transparent; border: 0;
+  border-left: 3px solid transparent;
+  color: color-mix(in oklab, var(--paper) 88%, transparent);
+  font: 700 12px/1 var(--sans); letter-spacing: -.01em;
+  padding: 10px 10px 10px 11px;
+  transition: background .14s, color .14s, border-color .14s, padding-left .14s;
+}
+.rail-item:hover { background: color-mix(in oklab, var(--paper) 8%, transparent); border-left-color: var(--acid); padding-left: 16px; color: var(--paper); }
+.rail-item[aria-current="true"] { background: var(--acid); color: var(--ink); border-left-color: var(--magenta); font-weight: 900; }
+.rail-item .n {
+  margin-left: auto;
+  font: 700 9px/1 var(--mono); letter-spacing: .1em;
+  color: var(--dim);
+}
+.rail-item[aria-current="true"] .n { color: color-mix(in oklab, var(--ink) 70%, transparent); }
+.rail-item .ic { width: 14px; text-align: center; color: var(--acid); font-size: 12px; }
+.rail-item[aria-current="true"] .ic { color: var(--ink); }
+.rail-item.hot .ic { color: var(--magenta); }
+
+.rail-foot {
+  display: flex; align-items: center; gap: 8px; margin: 26px 0 0;
+  font: 700 9px/1 var(--mono); letter-spacing: .16em; color: var(--dim); text-transform: uppercase;
+}
+.rail-dot {
+  width: 7px; height: 7px; background: var(--acid); border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+
+.rail-veil {
+  position: fixed; inset: 0; z-index: 55;
+  background: color-mix(in oklab, var(--ink) 70%, transparent);
+  backdrop-filter: blur(3px);
+  animation: fade .2s ease-out;
+}
+.rail-veil[hidden] { display: none; }
+
+/* Pinned on wide screens: the drawer stops overlaying and the page makes room. */
+@media (min-width: 1280px) {
+  html.rail-open body { padding-left: var(--rail-w); }
+  html.rail-open .rail-veil { display: none; }
+  body { transition: padding-left .3s cubic-bezier(.3,.9,.3,1); }
+}
+
+html.chill .rail { transition: none; }
+html.chill .rail-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rail, body { transition: none !important; }
+}
 
 /* ------------------------------------------------------------------ hero -- */
 
