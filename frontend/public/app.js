@@ -1104,23 +1104,33 @@ async function loadBrowse() {
 
 // Windowed pager: first, last, and a few either side of the current page, so 100
 // pages do not produce 100 buttons.
+const PAGE_WINDOW = 5;
+
+// A sliding window of exactly PAGE_WINDOW numbers whenever that many pages exist.
+// The previous "current ±2 plus first and last" approach shrank to three or four
+// numbers near either end, so the control changed width as you paged through it.
 function pagerHTML(page, total) {
   if (total < 2) return "";
-  const nums = new Set([1, total, page]);
-  for (let d = 1; d <= 2; d++) {
-    if (page - d > 0) nums.add(page - d);
-    if (page + d <= total) nums.add(page + d);
-  }
-  const sorted = [...nums].sort((a, z) => a - z);
 
-  let out = `<button class="pg-step" data-page="${page - 1}" ${page === 1 ? "disabled" : ""}>‹ Prev</button>`;
-  let prev = 0;
-  for (const n of sorted) {
-    if (n - prev > 1) out += `<span class="pg-gap">…</span>`;
+  const span = Math.min(PAGE_WINDOW, total);
+  // Clamped so the window stays full at both ends: page 1 shows 1-5, and the
+  // last page shows the final five rather than trailing off.
+  const start = Math.max(1, Math.min(page - Math.floor(span / 2), total - span + 1));
+  const nums = Array.from({ length: span }, (_, i) => start + i);
+
+  const first = page === 1;
+  const last = page >= total;
+  // Only worth offering a jump to the ends when the window cannot already reach them.
+  const jumps = total > span;
+
+  let out = "";
+  if (jumps) out += `<button class="pg-step" data-page="1" aria-label="First page" ${first ? "disabled" : ""}>«</button>`;
+  out += `<button class="pg-step" data-page="${page - 1}" ${first ? "disabled" : ""}>‹ Prev</button>`;
+  for (const n of nums) {
     out += `<button class="pg-num" data-page="${n}" aria-current="${n === page}">${n}</button>`;
-    prev = n;
   }
-  out += `<button class="pg-step" data-page="${page + 1}" ${page >= total ? "disabled" : ""}>Next ›</button>`;
+  out += `<button class="pg-step" data-page="${page + 1}" ${last ? "disabled" : ""}>Next ›</button>`;
+  if (jumps) out += `<button class="pg-step" data-page="${total}" aria-label="Last page (${total})" ${last ? "disabled" : ""}>»</button>`;
   return `<nav class="pager" aria-label="Pages">${out}</nav>`;
 }
 
