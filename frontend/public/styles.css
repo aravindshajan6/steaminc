@@ -672,6 +672,61 @@ a.prov b { font-size: 9px; opacity: .7; }
   letter-spacing: .1em; color: var(--dim); text-transform: uppercase;
 }
 
+/* --------------------------------------------------------------- seasons -- */
+
+.seasons-wrap { padding: 0 clamp(16px, 3.4vw, 34px) clamp(20px, 3vw, 30px); }
+
+.seasons {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px;
+  scrollbar-width: none;
+}
+.seasons::-webkit-scrollbar { display: none; }
+.season-tab {
+  flex: 0 0 auto;
+  font: 800 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  background: transparent; color: var(--paper);
+  border: 1px solid color-mix(in oklab, var(--paper) 30%, transparent);
+  padding: 9px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.season-tab span {
+  font-size: 9px; padding: 2px 5px;
+  background: color-mix(in oklab, var(--paper) 18%, transparent);
+}
+.season-tab:hover { border-color: var(--acid); color: var(--acid); }
+.season-tab[aria-selected="true"] { background: var(--acid); border-color: var(--acid); color: var(--ink); }
+.season-tab[aria-selected="true"] span { background: color-mix(in oklab, var(--ink) 20%, transparent); }
+
+.ep-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.ep {
+  display: grid; grid-template-columns: 168px 1fr; gap: 14px;
+  border: 1px solid color-mix(in oklab, var(--paper) 18%, transparent);
+  padding: 12px;
+}
+@media (max-width: 640px) { .ep { grid-template-columns: 1fr; } }
+
+.ep-still {
+  position: relative; aspect-ratio: 16 / 9;
+  background-size: cover; background-position: center;
+  border: 1px solid color-mix(in oklab, var(--paper) 25%, transparent);
+}
+.ep-no {
+  position: absolute; left: 6px; bottom: 6px;
+  font: 900 10px/1 var(--mono); letter-spacing: .1em;
+  background: var(--ink); color: var(--acid);
+  border: 1px solid var(--acid); padding: 4px 6px;
+}
+.ep-head { display: flex; align-items: baseline; gap: 10px; }
+.ep-name { font: 800 15px/1.25 var(--sans); margin: 0; }
+.ep-score { margin-left: auto; font: 900 10px/1 var(--mono); color: var(--acid); }
+.ep-meta { font: 700 10px/1 var(--mono); letter-spacing: .1em; color: var(--dim); margin: 7px 0 8px; text-transform: uppercase; }
+.ep-blurb {
+  font-size: 13px; line-height: 1.55; margin: 0;
+  color: color-mix(in oklab, var(--paper) 82%, transparent);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 /* -------------------------------------------------------------- comments -- */
 
 .cmt-wrap { padding: 0 clamp(16px, 3.4vw, 34px) clamp(28px, 4vw, 40px); }

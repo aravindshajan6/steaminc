@@ -437,6 +437,79 @@ function attachTilt(el) {
 
 /* ------------------------------------------------------------------ hero -- */
 
+/* ----------------------------------------------------------------- seasons -- */
+
+const seasonsSection = (d) => {
+  const list = d.seasonList || [];
+  if (d.media !== "tv" || !list.length) return "";
+  // Open on the first real season — landing on Specials is rarely what anyone wants.
+  const first = list.find((s) => !s.specials) || list[0];
+  return `
+    <div class="sec-cap">Episodes</div>
+    <div class="seasons" id="seasonTabs" role="tablist">
+      ${list.map((s) => `
+        <button class="season-tab" role="tab" data-season="${s.number}"
+                aria-selected="${s.number === first.number}">
+          ${esc(s.name)} <span>${s.episodes}</span>
+        </button>`).join("")}
+    </div>
+    <div class="eps" id="epList" data-tv="${esc(d.id)}"></div>`;
+};
+
+function episodeHTML(e) {
+  const still = e.still ? `url('${art(e.still, "w300")}') center/cover` : genArt(e.name);
+  return `
+    <li class="ep">
+      <div class="ep-still" style="background:${still}">
+        <span class="ep-no">E${e.number}</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-head">
+          <h4 class="ep-name">${esc(e.name)}</h4>
+          ${e.score ? `<span class="ep-score">${e.score}</span>` : ""}
+        </div>
+        <p class="ep-meta">${[e.air, e.runtime ? `${e.runtime} min` : null].filter(Boolean).map(esc).join(" · ")}</p>
+        ${e.overview ? `<p class="ep-blurb">${esc(e.overview)}</p>` : ""}
+      </div>
+    </li>`;
+}
+
+async function loadSeason(tvId, number) {
+  const box = $("#epList");
+  if (!box) return;
+  box.innerHTML = `<div class="skel skel-band"></div>`.repeat(3);
+  try {
+    const data = await api("/api/season", { id: tvId, season: number });
+    // The sheet may have moved on, or another season tab been clicked, mid-flight.
+    if (!$("#epList") || $("#epList").dataset.tv !== String(tvId)) return;
+    if (state.season !== number) return;
+    box.innerHTML = data.episodes.length
+      ? `<ul class="ep-list">${data.episodes.map(episodeHTML).join("")}</ul>`
+      : `<p class="cmt-empty">No episode details listed for this season.</p>`;
+  } catch {
+    box.innerHTML = `<p class="cmt-empty">Could not load that season.</p>`;
+  }
+}
+
+function wireSeasons(d) {
+  const tabs = $("#seasonTabs");
+  if (!tabs) return;
+  const list = d.seasonList || [];
+  const first = list.find((s) => !s.specials) || list[0];
+  state.season = first.number;
+  loadSeason(d.id, first.number);
+
+  tabs.querySelectorAll(".season-tab").forEach((t) =>
+    t.addEventListener("click", () => {
+      const n = Number(t.dataset.season);
+      if (n === state.season) return;
+      state.season = n;
+      tabs.querySelectorAll(".season-tab").forEach((x) =>
+        x.setAttribute("aria-selected", String(Number(x.dataset.season) === n)));
+      loadSeason(d.id, n);
+    }));
+}
+
 /* ---------------------------------------------------------------- comments -- */
 
 const timeAgo = (iso) => {
@@ -874,10 +947,14 @@ function renderSheet(d) {
         <div class="strip" style="padding-left:0;padding-right:0">${d.recommendations.map(cardHTML).join("")}</div>
       </div>` : ""}
 
+    ${d.media === "tv" && d.seasonList?.length
+      ? `<div class="seasons-wrap">${seasonsSection(d)}</div>` : ""}
+
     <div class="cmt-wrap">${commentsSection()}</div>
   `;
 
   $("#sheetSave").onclick = () => { toggleSave(d); $("#sheetSave").innerHTML = `★ ${saved(d) ? "Saved" : "Save it"}`; };
+  wireSeasons(d);
   if ($("#cmtForm")) $("#cmtForm").addEventListener("submit", submitComment);
   if ($("#cmtSignIn")) $("#cmtSignIn").onclick = () => openAuth("in");
   loadComments(d.media, d.id);
