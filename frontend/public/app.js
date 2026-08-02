@@ -207,11 +207,63 @@ function openAuth(mode = "in") {
   $("#authGo").textContent = copy[2];
   $("#authSwapText").textContent = copy[3];
   $("#authSwap").textContent = copy[4];
-  if (signedIn) $("#authWho").textContent = `${state.user.name} · ${state.user.email}`;
+  if (signedIn) paintAccount();
   else setTimeout(() => $(mode === "up" ? "#authName" : "#authEmail").focus(), 30);
 }
 
 const closeAuth = () => { $("#authWrap").hidden = true; };
+
+function paintAccount() {
+  const u = state.user;
+  if (!u) return;
+  $("#acctAvatar").textContent = (u.name || u.email)[0] || "?";
+  $("#acctName").textContent = u.name;
+  $("#acctEmail").textContent = u.email;
+  $("#acctRename").value = u.name;
+
+  const list = state.list || [];
+  const free = list.filter((i) => i.media === "free").length;
+  const since = u.created
+    ? new Date(u.created).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+    : "—";
+
+  $("#acctStats").innerHTML = `
+    <div class="acct-stat"><b>${list.length}</b><span>Saved</span></div>
+    <div class="acct-stat"><b>${free}</b><span>Free to watch</span></div>
+    <div class="acct-stat"><b>${esc(since)}</b><span>Member since</span></div>`;
+}
+
+async function saveName() {
+  const name = $("#acctRename").value.trim();
+  if (!name) return authError("A display name is required.");
+  try {
+    const d = await post("/api/auth/profile", "POST", { name });
+    state.user = d.user;
+    renderAccount();
+    paintAccount();
+    toast("name updated");
+  } catch (err) {
+    authError(err.message);
+  }
+}
+
+async function deleteAccount() {
+  const password = $("#acctDelPw").value;
+  if (!password) return authError("Enter your password to confirm.");
+  try {
+    await post("/api/auth/delete", "POST", { password });
+    state.user = null;
+    state.list = [];
+    localStorage.removeItem("sc:list");
+    closeAuth();
+    renderAccount();
+    renderRows();
+    $("#listCount").textContent = 0;
+    toast("account deleted");
+  } catch (err) {
+    authError(err.message);
+  }
+}
 
 function authBusy(on) {
   $("#authGo").disabled = on;
@@ -936,6 +988,8 @@ $("#account").onclick = () => openAuth(state.user ? "account" : "in");
 $("#closeAuth").onclick = closeAuth;
 $("#authForm").addEventListener("submit", submitAuth);
 $("#authSwap").onclick = () => openAuth(state.authMode === "up" ? "in" : "up");
+$("#acctSave").onclick = saveName;
+$("#acctDelete").onclick = deleteAccount;
 for (const id of ["#authPassword", "#authRepeat"]) $(id).addEventListener("input", paintPasswordRules);
 
 $("#openList").onclick = (e) => {

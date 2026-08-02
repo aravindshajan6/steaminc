@@ -117,6 +117,18 @@ export class MongoStore {
     if (token) await this.sessions.deleteOne({ token });
   }
 
+  async rename(userId, name) {
+    await this.users.updateOne({ id: userId }, { $set: { name } });
+    return this.userById(userId);
+  }
+
+  async deleteUser(userId) {
+    await this.users.deleteOne({ id: userId });
+    // Every session, not just the current one — a deleted account must not stay
+    // signed in on some other device.
+    await this.sessions.deleteMany({ userId });
+  }
+
   async setList(userId, list) {
     const capped = list.slice(0, 500);
     const res = await this.users.findOneAndUpdate(

@@ -416,6 +416,29 @@ const ROUTES = {
     return { user: publicUser(ctx.user), list: ctx.user?.list || [] };
   },
 
+  async "/api/auth/profile"(params, ctx) {
+    requireMethod(ctx, "POST");
+    const user = requireUser(ctx);
+    const body = await readJson(ctx.req);
+    const name = String(body.name || "").trim().slice(0, 60);
+    if (!name) throw Object.assign(new Error("A display name is required."), { status: 400 });
+    return { user: publicUser(await store.rename(user.id, name)) };
+  },
+
+  // Deleting an account is irreversible, so it re-checks the password even though
+  // the session is already valid — a walked-away-from laptop should not be enough.
+  async "/api/auth/delete"(params, ctx) {
+    requireMethod(ctx, "POST");
+    const user = requireUser(ctx);
+    const body = await readJson(ctx.req);
+    if (!(await store.verify(user, String(body.password || "")))) {
+      throw Object.assign(new Error("That password is not correct."), { status: 401 });
+    }
+    await store.deleteUser(user.id);
+    ctx.headers["set-cookie"] = clearCookie();
+    return { ok: true };
+  },
+
   async "/api/list"(params, ctx) {
     const user = requireUser(ctx);
     if (ctx.req.method === "GET") return { list: user.list };

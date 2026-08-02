@@ -151,7 +151,31 @@
     </div>
 
     <div id="authAccount" hidden>
-      <p class="auth-who">Signed in as <b id="authWho"></b></p>
+      <div class="acct-top">
+        <div class="acct-avatar" id="acctAvatar">?</div>
+        <div>
+          <p class="acct-name" id="acctName">—</p>
+          <p class="acct-email" id="acctEmail">—</p>
+        </div>
+      </div>
+
+      <div class="acct-stats" id="acctStats"></div>
+
+      <label class="auth-field">
+        <span>Display name</span>
+        <input id="acctRename" maxlength="60" placeholder="Your name" />
+      </label>
+      <button type="button" class="btn acct-save" id="acctSave">Save name</button>
+
+      <details class="acct-danger">
+        <summary>Delete this account</summary>
+        <p class="tiny">This removes your account and watchlist permanently. It cannot be undone.</p>
+        <label class="auth-field">
+          <span>Confirm your password</span>
+          <input id="acctDelPw" type="password" autocomplete="current-password" placeholder="Your password" />
+        </label>
+        <button type="button" class="btn acct-del" id="acctDelete">Delete permanently</button>
+      </details>
     </div>
 
     <p class="auth-error" id="authError" hidden role="alert"></p>
