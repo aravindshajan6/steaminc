@@ -1047,19 +1047,20 @@ const railOpen = () => document.documentElement.classList.contains("rail-open");
 // Shown while a page of results is in flight: the same tumbling cube as the
 // splash, sized to sit inside a page heading rather than replace the screen.
 function browseLoader(name, page) {
+  // Deliberately NOT skeleton cards: a grid of empty outlines advertises how much
+  // is missing. One panel over the whole shelf hides the assembly instead.
   return `
-    <div class="cat-head loading">
-      <div class="mini-cube" aria-hidden="true">
+    <div class="cat-head"><h2 class="cat-title">${esc(name || "Loading")}</h2></div>
+    <div class="load-stage" role="status" aria-live="polite">
+      <div class="load-veil" aria-hidden="true"></div>
+      <div class="mini-cube big" aria-hidden="true">
         <span class="mf f1"></span><span class="mf f2"></span><span class="mf f3"></span>
         <span class="mf f4"></span><span class="mf f5"></span><span class="mf f6"></span>
       </div>
-      <div class="load-text">
-        <h2 class="cat-title">${esc(name || "Loading")}</h2>
-        <p class="load-line">
-          <span class="load-bar"><i></i></span>
-          ${page ? `fetching page ${page}` : "pulling the shelf"}
-        </p>
-      </div>
+      <p class="load-line">
+        <span class="load-bar"><i></i></span>
+        ${page ? `fetching page ${page}` : "pulling the shelf"}
+      </p>
     </div>`;
 }
 
@@ -1076,7 +1077,7 @@ async function openBrowse(desc, { push = true } = {}) {
   $("#hero").hidden = true;            // the carousel belongs to the homepage
   clearTimeout(state.heroTimer);
   markCat();
-  $("#rows").innerHTML = browseLoader(b.name) + `<div class="grid">${skelCard.repeat(12)}</div>`;
+  $("#rows").innerHTML = browseLoader(b.name);
   window.scrollTo({ top: 0, behavior: "instant" });
 
   await loadBrowse();
@@ -1155,7 +1156,7 @@ async function goPage(n) {
   location.hash = b.kind === "row"
     ? `/r/${b.key}/${n}`
     : `/c/${b.media}/${b.genre}/${n}`;
-  $("#rows").innerHTML = browseLoader(b.name, n) + `<div class="grid">${skelCard.repeat(12)}</div>`;
+  $("#rows").innerHTML = browseLoader(b.name, n);
   window.scrollTo({ top: 0, behavior: "instant" });
   await loadBrowse();
 }

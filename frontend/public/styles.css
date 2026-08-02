@@ -399,22 +399,39 @@ html.chill .rail-dot { animation: none; }
 }
 .cat-sort:hover { border-color: var(--acid); }
 
-/* Loading heading. Same cube as the splash, shrunk to heading scale so the page
-   keeps its shape while results are in flight instead of collapsing to a spinner. */
-.cat-head.loading { align-items: center; gap: 18px; }
-.load-text { display: grid; gap: 6px; }
+/* Loading panel. Stands in for the whole grid rather than sitting beside a set
+   of skeleton cards — empty outlines advertise how much has not arrived yet. */
+
+.load-stage {
+  position: relative; overflow: hidden;
+  min-height: 56vh;
+  margin: 0 clamp(14px, 4vw, 40px) 40px;
+  border: 2px dashed color-mix(in oklab, var(--paper) 16%, transparent);
+  display: grid; place-items: center; align-content: center; gap: 26px;
+}
+/* Faint house colours behind the cube so the panel is not a dead rectangle. */
+.load-veil {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(46% 60% at 34% 38%, color-mix(in oklab, var(--violet) 40%, transparent), transparent 70%),
+    radial-gradient(40% 55% at 70% 66%, color-mix(in oklab, var(--cyan) 22%, transparent), transparent 70%);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+.load-stage > *:not(.load-veil) { position: relative; z-index: 1; }
 
 .mini-cube {
   position: relative; width: 42px; height: 42px; flex: 0 0 auto;
   transform-style: preserve-3d;
   animation: tumble 3.4s cubic-bezier(.55,.06,.45,.94) infinite;
 }
+.mini-cube.big { width: 82px; height: 82px; }
+
 .mini-cube .mf {
   position: absolute; inset: 0;
   border: 2px solid var(--acid);
   background: color-mix(in oklab, var(--acid) 8%, transparent);
 }
-/* 21px = half of 42px, so faces land exactly on the cube surface. */
+/* Half the edge length, so each face lands exactly on the cube surface. */
 .mini-cube .f1 { transform: translateZ(21px); }
 .mini-cube .f2 { transform: rotateY(180deg) translateZ(21px); border-color: var(--magenta); }
 .mini-cube .f3 { transform: rotateY(90deg)  translateZ(21px); border-color: var(--cyan); }
@@ -422,13 +439,20 @@ html.chill .rail-dot { animation: none; }
 .mini-cube .f5 { transform: rotateX(90deg)  translateZ(21px); }
 .mini-cube .f6 { transform: rotateX(-90deg) translateZ(21px); border-color: var(--magenta); }
 
+.mini-cube.big .f1 { transform: translateZ(41px); }
+.mini-cube.big .f2 { transform: rotateY(180deg) translateZ(41px); }
+.mini-cube.big .f3 { transform: rotateY(90deg)  translateZ(41px); }
+.mini-cube.big .f4 { transform: rotateY(-90deg) translateZ(41px); }
+.mini-cube.big .f5 { transform: rotateX(90deg)  translateZ(41px); }
+.mini-cube.big .f6 { transform: rotateX(-90deg) translateZ(41px); }
+
 .load-line {
-  display: flex; align-items: center; gap: 10px; margin: 0;
-  font: 800 9px/1 var(--mono); letter-spacing: .24em;
+  display: flex; align-items: center; gap: 12px; margin: 0;
+  font: 800 9px/1 var(--mono); letter-spacing: .26em;
   color: var(--acid); text-transform: uppercase;
 }
 .load-bar {
-  display: block; width: 120px; height: 3px; overflow: hidden;
+  display: block; width: 140px; height: 3px; overflow: hidden;
   background: color-mix(in oklab, var(--paper) 16%, transparent);
 }
 .load-bar i {
@@ -437,10 +461,12 @@ html.chill .rail-dot { animation: none; }
   animation: barslide 1.2s ease-in-out infinite;
 }
 
-html.chill .mini-cube { animation: none; transform: rotateX(-20deg) rotateY(-30deg); }
+html.chill .mini-cube, html.chill .load-veil { animation: none; }
+html.chill .mini-cube { transform: rotateX(-20deg) rotateY(-30deg); }
 html.chill .load-bar i { animation: none; width: 100%; }
 @media (prefers-reduced-motion: reduce) {
-  .mini-cube { animation: none; transform: rotateX(-20deg) rotateY(-30deg); }
+  .mini-cube, .load-veil { animation: none; }
+  .mini-cube { transform: rotateX(-20deg) rotateY(-30deg); }
   .load-bar i { animation: none; width: 100%; }
 }
 
