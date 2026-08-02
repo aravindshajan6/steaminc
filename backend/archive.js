@@ -16,7 +16,18 @@ const UA = { "user-agent": "steaminc/1.0 (+local discovery app)", accept: "appli
 
 // Collections that are public domain or explicitly openly licensed. Deliberately narrow:
 // the Archive hosts plenty that is neither, and this app only points at what is free to watch.
-const COLLECTIONS = ["publicmovies212", "feature_films", "prelinger", "classic_cartoons"];
+//
+// Chosen by actually querying them rather than by their names sounding right:
+//   feature_films    28k  — the main source of actual features
+//   silent_films      3k  — Caligari, Phantom of the Opera, Nosferatu
+//   classic_cartoons  81  — small, but Popeye and Betty Boop earn their place
+//
+// Two former entries were removed after checking. `publicmovies212` returns ZERO
+// items — a dead collection contributing nothing. `prelinger` returns 10k, but it
+// is industrial and classroom shorts ("Health: Your Posture"), and their enormous
+// download counts buried every real film when sorting by popularity. This row is
+// meant to be "films you can watch", not an ephemera archive.
+const COLLECTIONS = ["feature_films", "silent_films", "classic_cartoons"];
 
 const strip = (html) =>
   String(html || "")
