@@ -1020,10 +1020,54 @@ const TICKER = [
   "PRESS / TO SEARCH ANYTHING", "★ TO SAVE", "SWITCH REGIONS UP TOP", "CHILL MODE KILLS THE NOISE",
 ];
 
+/* ---------------------------------------------------------------- splash -- */
+
+// Shown once per browser session. A loader that reappears on every navigation
+// stops being an intro and becomes an obstacle.
+function initSplash() {
+  const el = $("#splash");
+  if (!el) return () => {};
+
+  const seen = sessionStorage.getItem("sc:splash") === "1";
+  const still =
+    document.documentElement.classList.contains("chill") ||
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (seen) {
+    el.remove();
+    return () => {};
+  }
+  if (still) el.classList.add("still");
+
+  const shownAt = Date.now();
+  const lines = ["THREADING THE PROJECTOR", "DIMMING THE HOUSE LIGHTS", "CHECKING THE LISTINGS"];
+  let i = 0;
+  const cycle = still ? null : setInterval(() => {
+    i = (i + 1) % lines.length;
+    const sub = $("#splashSub");
+    if (sub) sub.textContent = lines[i];
+  }, 1400);
+
+  // Returns the dismisser so boot() can close it exactly when data is ready.
+  return () => {
+    clearInterval(cycle);
+    // Hold briefly if the data beat the animation — a splash that flashes for
+    // 80ms reads as a glitch, not an intro.
+    const held = Math.max(0, 900 - (Date.now() - shownAt));
+    setTimeout(() => {
+      el.classList.add("gone");
+      sessionStorage.setItem("sc:splash", "1");
+      setTimeout(() => el.remove(), 700);
+    }, held);
+  };
+}
+
 async function boot() {
   $("#ticker").innerHTML = [...TICKER, ...TICKER].map((t) => `<span>${t} ✦</span>`).join("");
   $("#listCount").textContent = state.list.length;
   if (localStorage.getItem("sc:chill") === "1") setChill(true);
+
+  const dismissSplash = initSplash();
 
   // Paint the shape of the page before any request lands.
   $("#rows").innerHTML = skeletonScreen();
@@ -1048,9 +1092,12 @@ async function boot() {
   renderRegions(config);
 
   if (!feed) {
+    dismissSplash();
     $("#rows").innerHTML = `<div class="notice">Server unreachable. Is <code>npm start</code> still running?</div>`;
     return;
   }
+  dismissSplash();
+
   state.feed = feed;
   startHeroCarousel(feed.heroes?.length ? feed.heroes : [feed.hero]);
   renderRows();
