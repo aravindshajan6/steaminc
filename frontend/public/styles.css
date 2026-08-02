@@ -379,6 +379,104 @@ html.chill .rail-dot { animation: none; }
   .rail, body { transition: none !important; }
 }
 
+/* ----------------------------------------------------------- browse view -- */
+/* Grid, heading and pager for an expanded row or genre. Kept in its own section:
+   these once lived under "categories" and were lost wholesale when that section
+   was replaced by the sidebar. */
+
+.cat-head {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 0 clamp(14px, 4vw, 40px) 18px;
+}
+.cat-title {
+  font: 900 clamp(26px, 5vw, 52px)/1 var(--sans);
+  letter-spacing: -.045em; text-transform: uppercase; margin: 0;
+}
+.cat-sort {
+  font: 800 10px/1 var(--mono); letter-spacing: .1em;
+  background: var(--ink-2); color: var(--paper); border: var(--edge);
+  padding: 9px 11px; cursor: pointer; margin-left: auto;
+}
+.cat-sort:hover { border-color: var(--acid); }
+
+/* Loading heading. Same cube as the splash, shrunk to heading scale so the page
+   keeps its shape while results are in flight instead of collapsing to a spinner. */
+.cat-head.loading { align-items: center; gap: 18px; }
+.load-text { display: grid; gap: 6px; }
+
+.mini-cube {
+  position: relative; width: 42px; height: 42px; flex: 0 0 auto;
+  transform-style: preserve-3d;
+  animation: tumble 3.4s cubic-bezier(.55,.06,.45,.94) infinite;
+}
+.mini-cube .mf {
+  position: absolute; inset: 0;
+  border: 2px solid var(--acid);
+  background: color-mix(in oklab, var(--acid) 8%, transparent);
+}
+/* 21px = half of 42px, so faces land exactly on the cube surface. */
+.mini-cube .f1 { transform: translateZ(21px); }
+.mini-cube .f2 { transform: rotateY(180deg) translateZ(21px); border-color: var(--magenta); }
+.mini-cube .f3 { transform: rotateY(90deg)  translateZ(21px); border-color: var(--cyan); }
+.mini-cube .f4 { transform: rotateY(-90deg) translateZ(21px); border-color: var(--violet); }
+.mini-cube .f5 { transform: rotateX(90deg)  translateZ(21px); }
+.mini-cube .f6 { transform: rotateX(-90deg) translateZ(21px); border-color: var(--magenta); }
+
+.load-line {
+  display: flex; align-items: center; gap: 10px; margin: 0;
+  font: 800 9px/1 var(--mono); letter-spacing: .24em;
+  color: var(--acid); text-transform: uppercase;
+}
+.load-bar {
+  display: block; width: 120px; height: 3px; overflow: hidden;
+  background: color-mix(in oklab, var(--paper) 16%, transparent);
+}
+.load-bar i {
+  display: block; height: 100%; width: 45%;
+  background: linear-gradient(90deg, var(--acid), var(--magenta), var(--cyan));
+  animation: barslide 1.2s ease-in-out infinite;
+}
+
+html.chill .mini-cube { animation: none; transform: rotateX(-20deg) rotateY(-30deg); }
+html.chill .load-bar i { animation: none; width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .mini-cube { animation: none; transform: rotateX(-20deg) rotateY(-30deg); }
+  .load-bar i { animation: none; width: 100%; }
+}
+
+.grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 16vw, 190px), 1fr));
+  padding: 0 clamp(14px, 4vw, 40px) 30px;
+}
+/* Cards are fixed-width inside a scrolling strip; in a grid they fill the cell. */
+.grid .card { width: auto; }
+
+.view-all {
+  flex: 0 0 auto; margin-left: auto;
+  font: 800 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+  background: transparent; color: var(--acid);
+  border: 1px solid var(--acid); padding: 8px 11px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.view-all:hover { background: var(--acid); color: var(--ink); }
+
+.pager {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center;
+  padding: 10px clamp(14px, 4vw, 40px) 64px;
+}
+.pager button {
+  font: 800 11px/1 var(--mono); letter-spacing: .08em;
+  background: transparent; color: var(--paper);
+  border: 1px solid color-mix(in oklab, var(--paper) 30%, transparent);
+  padding: 10px 13px; cursor: pointer; min-width: 40px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.pager button:hover:not(:disabled) { border-color: var(--acid); color: var(--acid); }
+.pager button[aria-current="true"] { background: var(--acid); border-color: var(--acid); color: var(--ink); }
+.pager button:disabled { opacity: .3; cursor: not-allowed; }
+.pg-gap { color: var(--dim); font: 700 11px var(--mono); padding: 0 2px; }
+
 /* ------------------------------------------------------------------ hero -- */
 
 .hero {

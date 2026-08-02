@@ -790,7 +790,9 @@ function routeFromHash() {
     const page = Number(cat[3] || 1);
     const b = state.browse;
     if (b?.kind === "genre" && b.genre === cat[2] && b.page === page) return;
-    const name = $(`#cats .cat[data-genre="${CSS.escape(cat[2])}"]`)?.dataset.name || "Category";
+    // Reads the sidebar, which replaced the old chip bar. Falls back to the row
+    // label the API returns rather than the useless generic "Category".
+    const name = $(`#railGenres [data-genre="${CSS.escape(cat[2])}"]`)?.dataset.name || null;
     return openBrowse({ kind: "genre", media: cat[1], genre: cat[2], page, name }, { push: false });
   }
 
@@ -1042,6 +1044,25 @@ function setRail(open) {
 
 const railOpen = () => document.documentElement.classList.contains("rail-open");
 
+// Shown while a page of results is in flight: the same tumbling cube as the
+// splash, sized to sit inside a page heading rather than replace the screen.
+function browseLoader(name, page) {
+  return `
+    <div class="cat-head loading">
+      <div class="mini-cube" aria-hidden="true">
+        <span class="mf f1"></span><span class="mf f2"></span><span class="mf f3"></span>
+        <span class="mf f4"></span><span class="mf f5"></span><span class="mf f6"></span>
+      </div>
+      <div class="load-text">
+        <h2 class="cat-title">${esc(name || "Loading")}</h2>
+        <p class="load-line">
+          <span class="load-bar"><i></i></span>
+          ${page ? `fetching page ${page}` : "pulling the shelf"}
+        </p>
+      </div>
+    </div>`;
+}
+
 async function openBrowse(desc, { push = true } = {}) {
   state.browse = { page: 1, sort: "popularity.desc", items: [], ...desc };
   const b = state.browse;
@@ -1055,9 +1076,7 @@ async function openBrowse(desc, { push = true } = {}) {
   $("#hero").hidden = true;            // the carousel belongs to the homepage
   clearTimeout(state.heroTimer);
   markCat();
-  $("#rows").innerHTML =
-    `<div class="cat-head"><h2 class="cat-title">${esc(b.name || "Browse")}</h2></div>
-     <div class="grid">${skelCard.repeat(12)}</div>`;
+  $("#rows").innerHTML = browseLoader(b.name) + `<div class="grid">${skelCard.repeat(12)}</div>`;
   window.scrollTo({ top: 0, behavior: "instant" });
 
   await loadBrowse();
@@ -1075,7 +1094,7 @@ async function loadBrowse() {
     if (state.browse !== b) return;
     b.items = data.items || [];
     b.totalPages = data.totalPages || 1;
-    b.name = b.name || data.label;
+    b.name = b.name || data.label || "Browse";
     renderBrowse();
   } catch {
     $("#rows").innerHTML = `<div class="notice">Could not load that list. Try another.</div>`;
@@ -1136,9 +1155,7 @@ async function goPage(n) {
   location.hash = b.kind === "row"
     ? `/r/${b.key}/${n}`
     : `/c/${b.media}/${b.genre}/${n}`;
-  $("#rows").innerHTML =
-    `<div class="cat-head"><h2 class="cat-title">${esc(b.name)}</h2></div>
-     <div class="grid">${skelCard.repeat(12)}</div>`;
+  $("#rows").innerHTML = browseLoader(b.name, n) + `<div class="grid">${skelCard.repeat(12)}</div>`;
   window.scrollTo({ top: 0, behavior: "instant" });
   await loadBrowse();
 }
