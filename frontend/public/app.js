@@ -969,13 +969,6 @@ function renderSheet(d) {
 
 /* ------------------------------------------------------------- categories -- */
 
-const SORTS = [
-  ["popularity.desc", "Most popular"],
-  ["vote_average.desc", "Highest rated"],
-  ["primary_release_date.desc", "Newest first"],
-  ["revenue.desc", "Biggest hits"],
-];
-
 // Quick links sit above the genres — the things people reach for most often,
 // which are not genres at all.
 const RAIL_QUICK = [
@@ -1083,12 +1076,44 @@ async function openBrowse(desc, { push = true } = {}) {
   await loadBrowse();
 }
 
+// Waits for a page's artwork to decode, so the grid appears complete rather than
+// filling in. Capped: one dead CDN image must never hold the page hostage, and a
+// slow connection gets the grid at the cutoff rather than an indefinite spinner.
+function preloadArt(items, { timeout = 6000 } = {}) {
+  const urls = items.map((i) => art(i.poster)).filter(Boolean);
+  if (!urls.length) return Promise.resolve();
+
+  const settled = urls.map((src) => new Promise((done) => {
+    const img = new Image();
+    // Resolve on error too — a broken poster falls back to its gradient, which is
+    // a fine outcome and not a reason to keep the whole page hidden.
+    img.onload = img.onerror = () => done();
+    img.src = src;
+  }));
+
+  return Promise.race([
+    Promise.all(settled),
+    new Promise((done) => setTimeout(done, timeout)),
+  ]);
+}
+
+// Swaps the loader's status line without rebuilding the panel, so the cube keeps
+// tumbling through its animation instead of restarting.
+function setLoadStatus(text) {
+  const line = $(".load-line");
+  if (!line) return;
+  const bar = line.querySelector(".load-bar");
+  line.textContent = "";
+  if (bar) line.appendChild(bar);
+  line.append(" " + text);
+}
+
 async function loadBrowse() {
   const b = state.browse;
   if (!b) return;
   try {
     const data = b.kind === "row"
-      ? await api("/api/row", { key: b.key, page: b.page })
+      ? await api("/api/row", { key: b.key, page: b.page, ...(b.sort ? { sort: b.sort } : {}) })
       : await api("/api/category", { media: b.media, genre: b.genre, page: b.page, sort: b.sort });
 
     // A slow page that resolves after the user has moved on must not overwrite.
@@ -1096,6 +1121,18 @@ async function loadBrowse() {
     b.items = data.items || [];
     b.totalPages = data.totalPages || 1;
     b.name = b.name || data.label || "Browse";
+    // The server decides what can be sorted and how it is labelled; null means
+    // this source has no meaningful ordering to offer.
+    b.sorts = data.sorts || null;
+    b.sort = data.sort || null;
+
+    // Data arriving is not the same as the page being ready. Rendering here would
+    // show thirty framed rectangles while the artwork trickles in — especially on
+    // Archive thumbnails, which are slow. Hold the loader until the images decode.
+    setLoadStatus("loading artwork");
+    await preloadArt(b.items);
+    if (state.browse !== b) return;
+
     renderBrowse();
   } catch {
     $("#rows").innerHTML = `<div class="notice">Could not load that list. Try another.</div>`;
@@ -1142,9 +1179,9 @@ function renderBrowse() {
     <div class="cat-head">
       <h2 class="cat-title glitch" data-text="${esc(b.name)}">${esc(b.name)}</h2>
       <span class="row-tag">page ${b.page} of ${b.totalPages}</span>
-      ${b.kind === "genre" ? `
-        <select class="cat-sort" id="catSort" aria-label="Sort">
-          ${SORTS.map(([v, l]) => `<option value="${v}"${v === b.sort ? " selected" : ""}>${l}</option>`).join("")}
+      ${b.sorts?.length ? `
+        <select class="cat-sort" id="catSort" aria-label="Sort these results">
+          ${b.sorts.map(([v, l]) => `<option value="${esc(v)}"${v === b.sort ? " selected" : ""}>${esc(l)}</option>`).join("")}
         </select>` : ""}
     </div>
     <div class="grid">${b.items.map(cardHTML).join("")}</div>
@@ -1153,7 +1190,13 @@ function renderBrowse() {
   wireCards();
 
   const sort = $("#catSort");
-  if (sort) sort.onchange = (e) => { b.sort = e.target.value; b.page = 1; goPage(1); };
+  if (sort) sort.onchange = async (e) => {
+    b.sort = e.target.value;
+    b.page = 1;
+    $("#rows").innerHTML = browseLoader(b.name);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    await loadBrowse();
+  };
 
   document.querySelectorAll(".pager [data-page]").forEach((el) =>
     el.addEventListener("click", () => goPage(Number(el.dataset.page))));

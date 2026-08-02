@@ -39,7 +39,7 @@ const strip = (html) =>
 const first = (v) => (Array.isArray(v) ? v[0] : v);
 
 /** Browse rows of watchable public-domain films. */
-export async function archiveSearch({ rows = 24, page = 1, query = "" } = {}) {
+export async function archiveSearch({ rows = 24, page = 1, query = "", sort = "downloads desc" } = {}) {
   const scope = `collection:(${COLLECTIONS.join(" OR ")}) AND mediatype:(movies)`;
   // Lucene syntax leaks straight through this endpoint, so strip anything operator-shaped.
   const safe = query.replace(/[^\p{L}\p{N} ]+/gu, " ").trim();
@@ -50,7 +50,7 @@ export async function archiveSearch({ rows = 24, page = 1, query = "" } = {}) {
   for (const f of ["identifier", "title", "year", "description", "downloads"]) {
     url.searchParams.append("fl[]", f);
   }
-  url.searchParams.set("sort[]", "downloads desc");
+  url.searchParams.set("sort[]", sort);
   url.searchParams.set("rows", String(rows));
   url.searchParams.set("page", String(page));
   url.searchParams.set("output", "json");

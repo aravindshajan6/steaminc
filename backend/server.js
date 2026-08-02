@@ -249,6 +249,23 @@ const FEED_GENRES = [
 const PER_PAGE = 30;
 
 // Every row on the homepage, addressable for full-page browsing.
+// Sort options, declared where the data comes from. The client renders whatever
+// this returns, so it never has to know TMDB's parameter names or the Archive's.
+const TMDB_SORTS = [
+  ["popularity.desc", "Most popular"],
+  ["vote_average.desc", "Highest rated"],
+  ["primary_release_date.desc", "Newest first"],
+  ["primary_release_date.asc", "Oldest first"],
+  ["revenue.desc", "Biggest hits"],
+];
+// No year sort here: the Archive's year field is user-entered and full of junk
+// (a "9999" title sits at the top of year-descending), so it would look broken.
+const ARCHIVE_SORTS = [
+  ["downloads desc", "Most watched"],
+  ["titleSorter asc", "Title A-Z"],
+  ["titleSorter desc", "Title Z-A"],
+];
+
 const ROW_SOURCES = {
   trending: { label: "Trending Now", hint: null, get: (p) => tmdb("/trending/all/day", { page: p }) },
   movies:   { label: "Popular Films", hint: "movie", get: (p) => tmdb("/movie/popular", { page: p }) },
@@ -259,21 +276,26 @@ const ROW_SOURCES = {
   soon:     { label: "Coming Soon", hint: "movie", get: (p) => tmdb("/movie/upcoming", { page: p }) },
   ...Object.fromEntries(FEED_GENRES.map((g) => [
     g.key,
-    { label: g.label, hint: g.media, get: (p) => discover(g.media, { genre: g.genre, page: p }) },
+    {
+      label: g.label,
+      hint: g.media,
+      sorts: TMDB_SORTS,
+      get: (p, sort) => discover(g.media, { genre: g.genre, page: p, sort }),
+    },
   ])),
 };
 
 // TMDB pages at 20 and we show 30, so a page of ours straddles two of theirs.
 // Fetch both, then slice the exact window — the alternative is showing 20 and
 // pretending that was the intent.
-async function pagedRow(source, page) {
+async function pagedRow(source, page, sort) {
   const start = (page - 1) * PER_PAGE;
   const firstUpstream = Math.floor(start / 20) + 1;
   const lastUpstream = Math.floor((start + PER_PAGE - 1) / 20) + 1;
 
   const pages = [];
   for (let p = firstUpstream; p <= lastUpstream; p++) pages.push(p);
-  const results = await Promise.all(pages.map((p) => source.get(p)));
+  const results = await Promise.all(pages.map((p) => source.get(p, sort)));
 
   const merged = results.flatMap((r) => r.results || []);
   const offset = start - (firstUpstream - 1) * 20;
@@ -391,22 +413,34 @@ const ROUTES = {
     const page = Math.min(Math.max(Number(params.get("page")) || 1, 1), 100);
 
     if (key === "free") {
-      const items = await archiveSearch({ rows: PER_PAGE, page });
+      const sort = ARCHIVE_SORTS.some(([v]) => v === params.get("sort"))
+        ? params.get("sort")
+        : ARCHIVE_SORTS[0][0];
+      const items = await archiveSearch({ rows: PER_PAGE, page, sort });
       // The Archive reports no reliable total for this query shape, so paging
       // continues while pages come back full rather than pretending to know.
       return { key, label: "Free To Watch Right Now", page, perPage: PER_PAGE,
+               sort, sorts: ARCHIVE_SORTS,
                totalPages: items.length < PER_PAGE ? page : page + 1, items };
     }
 
     const source = ROW_SOURCES[key];
     if (!source) throw Object.assign(new Error("No such row."), { status: 404 });
+
+    // Only offered where the upstream honours it. The curated lists (trending,
+    // popular, top rated, now playing) ARE a ranking already — TMDB ignores
+    // sort_by on them, so advertising a control that does nothing would be worse
+    // than offering none.
+    const sorts = source.sorts || null;
+    const sort = sorts?.some(([v]) => v === params.get("sort")) ? params.get("sort") : sorts?.[0]?.[0];
+
     if (DEMO) {
-      return { key, label: source.label, page, perPage: PER_PAGE, totalPages: 1, items: demo().titles };
+      return { key, label: source.label, page, perPage: PER_PAGE, totalPages: 1, sorts, sort, items: demo().titles };
     }
 
-    return cached(`row:${key}:${page}`, 6e5, async () => {
-      const { items, totalPages, totalResults } = await pagedRow(source, page);
-      return { key, label: source.label, page, perPage: PER_PAGE, totalPages, totalResults, items };
+    return cached(`row:${key}:${page}:${sort || "-"}`, 6e5, async () => {
+      const { items, totalPages, totalResults } = await pagedRow(source, page, sort);
+      return { key, label: source.label, page, perPage: PER_PAGE, sorts, sort, totalPages, totalResults, items };
     });
   },
 
@@ -457,8 +491,9 @@ const ROUTES = {
     const media = params.get("media") === "tv" ? "tv" : "movie";
     const genre = (params.get("genre") || "").replace(/[^\d,]/g, "");
     const page = Math.min(Math.max(Number(params.get("page")) || 1, 1), 20);
-    const sort = ["popularity.desc", "vote_average.desc", "primary_release_date.desc", "revenue.desc"]
-      .includes(params.get("sort")) ? params.get("sort") : "popularity.desc";
+    const sort = TMDB_SORTS.some(([v]) => v === params.get("sort"))
+      ? params.get("sort")
+      : TMDB_SORTS[0][0];
 
     if (DEMO) {
       return { media, genre, page, totalPages: 1, items: demo().titles.filter((t) => t.media === media) };
@@ -466,7 +501,7 @@ const ROUTES = {
     return cached(`cat:${media}:${genre}:${sort}:${page}`, 6e5, async () => {
       const data = await discover(media, { genre, page, sort });
       return {
-        media, genre, page, sort,
+        media, genre, page, sort, sorts: TMDB_SORTS,
         totalPages: Math.min(data.total_pages || 1, 20),
         items: cardList(data, media),
       };
