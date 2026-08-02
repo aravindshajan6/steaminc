@@ -252,6 +252,56 @@ kbd {
 }
 .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
 
+/* ---------------------------------------------------------- hero carousel -- */
+
+/* Content crossfades rather than sliding: the backdrop is a full-bleed image and
+   sliding it would drag the text along with it, which reads as a page change. */
+.hero-body, .hero-art { transition: opacity .45s ease; }
+.hero.swapping .hero-body, .hero.swapping .hero-art { opacity: 0; }
+
+.hero-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
+  width: 46px; height: 62px;
+  background: color-mix(in oklab, var(--ink) 62%, transparent);
+  border: var(--edge); color: var(--paper);
+  font: 300 26px/1 var(--sans); cursor: pointer;
+  transition: background .18s, color .18s, transform .18s;
+}
+.hero-arrow:hover { background: var(--acid); color: var(--ink); }
+.hero-arrow.prev { left: clamp(6px, 1.5vw, 18px); }
+.hero-arrow.next { right: clamp(6px, 1.5vw, 18px); }
+.hero-arrow:hover.prev { transform: translateY(-50%) translateX(-3px); }
+.hero-arrow:hover.next { transform: translateY(-50%) translateX(3px); }
+
+.hero-dots {
+  position: absolute; z-index: 4;
+  left: clamp(14px, 4vw, 40px); bottom: clamp(14px, 2.5vw, 26px);
+  display: flex; gap: 9px; align-items: center;
+}
+.hero-dot {
+  width: 34px; height: 5px; padding: 0;
+  background: color-mix(in oklab, var(--paper) 32%, transparent);
+  border: 0; cursor: pointer; position: relative; overflow: hidden;
+  transition: background .2s;
+}
+.hero-dot:hover { background: color-mix(in oklab, var(--paper) 60%, transparent); }
+.hero-dot[aria-selected="true"] { background: color-mix(in oklab, var(--paper) 24%, transparent); }
+/* The active dot doubles as a progress bar for the auto-advance. */
+.hero-dot[aria-selected="true"]::after {
+  content: ""; position: absolute; inset: 0;
+  background: var(--acid); transform-origin: left;
+  animation: dotfill var(--hero-ms, 7000ms) linear forwards;
+}
+@keyframes dotfill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.hero.paused .hero-dot[aria-selected="true"]::after { animation-play-state: paused; }
+
+/* Chill mode keeps the carousel usable but stops it moving on its own. */
+html.chill .hero-dot[aria-selected="true"]::after { animation: none; background: var(--acid); }
+
+@media (max-width: 720px) {
+  .hero-arrow { display: none; }
+}
+
 /* ------------------------------------------------------------------ rows -- */
 
 .rows { position: relative; z-index: 2; padding: clamp(26px, 5vw, 56px) 0 70px; }

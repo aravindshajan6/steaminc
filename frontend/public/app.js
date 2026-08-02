@@ -381,6 +381,63 @@ function attachTilt(el) {
 
 /* ------------------------------------------------------------------ hero -- */
 
+/* ---------------------------------------------------------- hero carousel -- */
+
+const HERO_MS = 7000;
+
+function startHeroCarousel(items) {
+  const heroes = (items || []).filter(Boolean);
+  if (!heroes.length) return;
+
+  state.heroes = heroes;
+  state.heroIdx = 0;
+  document.documentElement.style.setProperty("--hero-ms", `${HERO_MS}ms`);
+
+  const single = heroes.length < 2;
+  $("#heroPrev").hidden = single;
+  $("#heroNext").hidden = single;
+  $("#heroDots").innerHTML = single
+    ? ""
+    : heroes.map((h, i) =>
+        `<button class="hero-dot" role="tab" data-i="${i}" aria-selected="${i === 0}" aria-label="${esc(h.title)}"></button>`).join("");
+
+  $("#heroDots").querySelectorAll(".hero-dot").forEach((d) =>
+    d.addEventListener("click", () => goHero(+d.dataset.i)));
+
+  renderHero(heroes[0]);
+  if (!single) armHeroTimer();
+}
+
+function armHeroTimer() {
+  clearTimeout(state.heroTimer);
+  // Auto-advance is motion. Chill mode and reduced-motion users get arrows and
+  // dots, and nothing that moves without being asked.
+  if (document.documentElement.classList.contains("chill")) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  state.heroTimer = setTimeout(() => goHero(state.heroIdx + 1), HERO_MS);
+}
+
+function goHero(next) {
+  const heroes = state.heroes || [];
+  if (heroes.length < 2) return;
+  const i = (next + heroes.length) % heroes.length;
+  if (i === state.heroIdx) return;
+
+  const hero = $("#hero");
+  hero.classList.add("swapping");
+  clearTimeout(state.heroTimer);
+
+  // Swap at the midpoint of the fade so the change itself is never visible.
+  setTimeout(() => {
+    state.heroIdx = i;
+    renderHero(heroes[i]);
+    hero.classList.remove("swapping");
+    $("#heroDots").querySelectorAll(".hero-dot").forEach((d) =>
+      d.setAttribute("aria-selected", String(+d.dataset.i === i)));
+    armHeroTimer();
+  }, 450);
+}
+
 function renderHero(item) {
   if (!item) return;
   $("#hero").hidden = false;
@@ -733,7 +790,7 @@ async function boot() {
     return;
   }
   state.feed = feed;
-  renderHero(feed.hero);
+  startHeroCarousel(feed.heroes?.length ? feed.heroes : [feed.hero]);
   renderRows();
   routeFromHash();
 }
@@ -748,6 +805,23 @@ addEventListener("popstate", routeFromHash);
 $("#q").addEventListener("input", (e) => runSearch(e.target.value));
 
 $("#chill").onclick = () => setChill(!document.documentElement.classList.contains("chill"));
+
+$("#heroPrev").onclick = () => goHero(state.heroIdx - 1);
+$("#heroNext").onclick = () => goHero(state.heroIdx + 1);
+
+// Reading the blurb should not cost you the slide. Hovering or tabbing in holds it.
+for (const ev of ["pointerenter", "focusin"]) {
+  $("#hero").addEventListener(ev, () => {
+    $("#hero").classList.add("paused");
+    clearTimeout(state.heroTimer);
+  });
+}
+for (const ev of ["pointerleave", "focusout"]) {
+  $("#hero").addEventListener(ev, () => {
+    $("#hero").classList.remove("paused");
+    armHeroTimer();
+  });
+}
 
 $("#account").onclick = () => openAuth(state.user ? "account" : "in");
 $("#closeAuth").onclick = closeAuth;

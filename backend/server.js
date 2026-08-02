@@ -191,6 +191,7 @@ function demoFeed() {
   return {
     demo: true,
     hero: all[0],
+    heroes: all.slice(0, 5),
     rows: [
       { key: "trending", label: "Trending Now", tag: "live", items: shuffled(0) },
       { key: "movies", label: "Popular Films", tag: "film", items: pick((t) => t.media === "movie") },
@@ -237,8 +238,11 @@ function tmdbFeed() {
       if (items.length) rows.push({ key, label, tag, items });
     });
     if (!rows.length) throw new Error("every feed row failed");
-    const heroPool = rows[0].items.filter((i) => i.backdrop);
-    return { demo: false, hero: heroPool[0] || rows[0].items[0], rows };
+    // A carousel needs several candidates, not one. Only items with a backdrop
+    // qualify — a hero with no artwork is the weakest thing on the page.
+    const heroPool = rows[0].items.filter((i) => i.backdrop && i.overview);
+    const heroes = (heroPool.length ? heroPool : rows[0].items).slice(0, 6);
+    return { demo: false, hero: heroes[0], heroes, rows };
   });
 }
 
@@ -266,6 +270,7 @@ const ROUTES = {
     const base = DEMO ? demoFeed() : await tmdbFeed();
     const rows = [...base.rows];
     let hero = base.hero;
+    let heroes = base.heroes || [base.hero];
 
     // Archive row is additive: if it fails, the page is exactly what it was before.
     try {
@@ -273,13 +278,16 @@ const ROUTES = {
       if (free.items.length) {
         rows.splice(DEMO ? 0 : 1, 0, free);
         // Without a TMDB key nothing else has artwork, so lead with something that does.
-        if (DEMO) hero = free.items.find((i) => i.poster) || hero;
+        if (DEMO) {
+          const withArt = free.items.filter((i) => i.poster).slice(0, 5);
+          if (withArt.length) { hero = withArt[0]; heroes = withArt; }
+        }
       }
     } catch (err) {
       console.warn("[feed] free row unavailable:", err.message);
     }
 
-    return { ...base, hero, rows };
+    return { ...base, hero, heroes, rows };
   },
 
   async "/api/free"() {
