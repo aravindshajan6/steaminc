@@ -55,6 +55,84 @@ kbd {
   outline-offset: 3px;
 }
 
+/* ---------------------------------------------------------------- splash -- */
+/* First-load only. A real 3D cube via CSS transforms — no library, no canvas. */
+
+.splash {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-content: center; justify-items: center; gap: 4px;
+  background:
+    radial-gradient(60% 60% at 50% 45%, color-mix(in oklab, var(--violet) 55%, transparent), transparent 70%),
+    var(--ink);
+  transition: opacity .6s ease, visibility .6s;
+}
+.splash.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.splash-stage { perspective: 620px; width: 190px; height: 190px; display: grid; place-items: center; }
+
+.cube {
+  position: relative; width: 92px; height: 92px;
+  transform-style: preserve-3d;
+  animation: tumble 4.2s cubic-bezier(.55,.06,.45,.94) infinite;
+}
+@keyframes tumble {
+  0%   { transform: rotateX(-22deg) rotateY(0deg); }
+  50%  { transform: rotateX(-202deg) rotateY(180deg); }
+  100% { transform: rotateX(-382deg) rotateY(360deg); }
+}
+
+.cube .face {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font: 900 34px/1 var(--sans);
+  border: 2px solid var(--paper);
+  background: color-mix(in oklab, var(--ink) 72%, transparent);
+  color: var(--paper);
+  backface-visibility: visible;
+  box-shadow: inset 0 0 26px color-mix(in oklab, var(--acid) 22%, transparent);
+}
+/* 46px = half of 92px, so each face sits exactly on the cube surface. */
+.fx-front  { transform: translateZ(46px);  color: var(--acid);    border-color: var(--acid); }
+.fx-back   { transform: rotateY(180deg) translateZ(46px); color: var(--magenta); border-color: var(--magenta); }
+.fx-right  { transform: rotateY(90deg)  translateZ(46px); color: var(--cyan);    border-color: var(--cyan); }
+.fx-left   { transform: rotateY(-90deg) translateZ(46px); color: var(--violet);  border-color: var(--violet); }
+.fx-top    { transform: rotateX(90deg)  translateZ(46px); color: var(--paper); }
+.fx-bottom { transform: rotateX(-90deg) translateZ(46px); color: var(--acid); }
+
+.cube-shadow {
+  position: absolute; bottom: 6px; width: 96px; height: 14px;
+  background: radial-gradient(50% 50%, color-mix(in oklab, var(--acid) 40%, transparent), transparent 70%);
+  filter: blur(7px);
+  animation: shadowpulse 4.2s ease-in-out infinite;
+}
+@keyframes shadowpulse { 0%,100% { transform: scaleX(1); opacity: .5; } 50% { transform: scaleX(.62); opacity: .28; } }
+
+.splash-word {
+  font: 900 clamp(26px, 5vw, 42px)/1 var(--sans);
+  letter-spacing: -.05em; text-transform: uppercase; margin: 22px 0 0;
+}
+.splash-sub {
+  font: 800 9px/1 var(--mono); letter-spacing: .3em;
+  color: var(--acid); text-transform: uppercase; margin: 10px 0 18px;
+}
+.splash-bar { width: 190px; height: 3px; background: color-mix(in oklab, var(--paper) 18%, transparent); overflow: hidden; }
+.splash-bar i {
+  display: block; height: 100%; width: 40%;
+  background: linear-gradient(90deg, var(--acid), var(--magenta), var(--cyan));
+  animation: barslide 1.5s ease-in-out infinite;
+}
+@keyframes barslide { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
+
+/* Chill mode and reduced-motion get the same screen without the tumbling. */
+html.chill .cube, .splash.still .cube { animation: none; transform: rotateX(-22deg) rotateY(-32deg); }
+html.chill .splash-bar i, .splash.still .splash-bar i { animation: none; width: 100%; }
+html.chill .cube-shadow, .splash.still .cube-shadow { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cube { animation: none; transform: rotateX(-22deg) rotateY(-32deg); }
+  .splash-bar i { animation: none; width: 100%; }
+}
+
 /* ------------------------------------------------------------ ambient fx -- */
 
 .fx { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
