@@ -17,7 +17,7 @@ import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveMatch, archiveSearch, archiveTitle } from "./archive.js";
 import {
-  validate, throttle, clearThrottle,
+  validate, cleanList, throttle, clearThrottle,
   COOKIE, parseCookies, sessionCookie, clearCookie, publicUser,
 } from "./auth.js";
 import { createStore } from "./store.js";
@@ -96,23 +96,6 @@ function requireMethod(ctx, method) {
 function requireUser(ctx) {
   if (!ctx.user) throw Object.assign(new Error("You need to be signed in."), { status: 401 });
   return ctx.user;
-}
-
-// Only ever store the fields the UI renders — a watchlist is user-controlled input,
-// not a place to let arbitrary JSON accumulate on disk.
-function cleanList(list) {
-  if (!Array.isArray(list)) throw Object.assign(new Error("list must be an array."), { status: 400 });
-  return list
-    .filter((i) => i && ["movie", "tv", "free"].includes(i.media) && ["string", "number"].includes(typeof i.id))
-    .slice(0, 500)
-    .map((i) => ({
-      id: i.media === "free" ? String(i.id).slice(0, 200) : Number(i.id),
-      media: i.media,
-      title: String(i.title || "").slice(0, 200),
-      poster: typeof i.poster === "string" ? i.poster.slice(0, 400) : null,
-      year: String(i.year || "").slice(0, 8),
-      score: Number.isFinite(i.score) ? i.score : null,
-    }));
 }
 
 /* ---------------------------------------------------------------- cache --- */

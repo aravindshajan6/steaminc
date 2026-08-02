@@ -248,6 +248,26 @@ export function validate({ email, password, name }) {
   return null;
 }
 
+/* ------------------------------------------------------ watchlist shape --- */
+
+// Only ever store the fields the UI renders — a watchlist is user-controlled input,
+// not a place to let arbitrary JSON accumulate on disk. Lives here rather than in
+// server.js so it can be tested without booting an HTTP listener.
+export function cleanList(list) {
+  if (!Array.isArray(list)) throw Object.assign(new Error("list must be an array."), { status: 400 });
+  return list
+    .filter((i) => i && ["movie", "tv", "free"].includes(i.media) && ["string", "number"].includes(typeof i.id))
+    .slice(0, 500)
+    .map((i) => ({
+      id: i.media === "free" ? String(i.id).slice(0, 200) : Number(i.id),
+      media: i.media,
+      title: String(i.title || "").slice(0, 200),
+      poster: typeof i.poster === "string" ? i.poster.slice(0, 400) : null,
+      year: String(i.year || "").slice(0, 8),
+      score: Number.isFinite(i.score) ? i.score : null,
+    }));
+}
+
 /* ---------------------------------------------------------- rate limiting --- */
 
 const attempts = new Map();

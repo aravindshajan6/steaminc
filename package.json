@@ -2,13 +2,14 @@
   "name": "steaminc",
   "version": "2.0.0",
   "private": true,
-  "description": "Legal streaming discovery deck — split backend/frontend, containerized.",
+  "description": "Legal streaming discovery deck \u2014 split backend/frontend, containerized.",
   "scripts": {
     "start": "npm --prefix backend start",
     "dev": "npm --prefix backend run dev",
     "up": "docker compose up --build -d",
     "down": "docker compose down",
     "logs": "docker compose logs -f",
-    "ps": "docker compose ps"
+    "ps": "docker compose ps",
+    "test": "npm --prefix backend test"
   }
 }
