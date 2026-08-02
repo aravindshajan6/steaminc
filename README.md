@@ -126,7 +126,11 @@ ever branches on media type.
 | `GET /api/free` | Just the watchable public-domain row |
 | `GET /api/search?q=` | Catalog search **plus** watchable results, merged |
 | `GET /api/title?media=&id=&region=` | Details, cast, trailer, recommendations, **and where to watch in that region** |
+| `GET /api/genres` | TMDB genre lists for movies and TV |
+| `GET /api/category?media=&genre=&page=&sort=` | Paged, sortable browse for one genre |
+| `GET` / `POST` / `DELETE /api/comments?media=&id=` | Per-title comments. Reading open, writing needs an account |
 | `POST /api/auth/signup` · `login` · `logout` | Accounts. Sets/clears the session cookie |
+| `POST /api/auth/profile` · `delete` | Rename, or delete the account (re-checks the password) |
 | `GET /api/auth/me` | Current user and their list, or `null` |
 | `GET` / `PUT /api/list` | The signed-in user's watchlist |
 
@@ -170,6 +174,18 @@ animation and overlay while keeping the layout identical, and
 `prefers-reduced-motion: reduce` does the same automatically. The loud version is a choice,
 not a tax.
 
+The homepage opens with a **3D splash** — a CSS-only tumbling cube, no library and no
+canvas — shown once per browser session, and a **hero carousel** of six trending titles that
+crossfades, pauses on hover, and stops auto-advancing entirely in chill mode.
+
+Below that are twelve rows, six of them genre-based. Genres are also **browsable**: the chip bar
+opens a paged, sortable grid at its own URL (`#/c/movie/27`).
+
+Every title sheet carries a **comment thread** tied to accounts — reading is open to anyone,
+posting needs an account, and you can only delete your own. The **account panel** shows your
+stats, renames you, and can delete the account outright, which re-checks your password and
+clears every session you have anywhere.
+
 Other bits worth knowing:
 
 - **`/` or ⌘K** opens search from anywhere. Arrows move, enter opens, esc closes. 180ms debounce.
@@ -204,6 +220,8 @@ dropped. [backend/auth.js](backend/auth.js) has no dependencies:
 - **Login is deliberately vague** — "Email or password is incorrect" either way — and hashes a
   decoy even when no such account exists, so neither the message nor the response time reveals
   which emails are registered.
+- **Signup requires** 8+ characters with a letter, a number and a symbol, entered twice. The
+  rules are enforced server-side; the form mirrors them as a live checklist.
 - **Throttled** to 8 failed attempts per email+IP per 15 minutes.
 - **Watchlist input is sanitized** server-side to the six fields the UI renders, so it cannot
   become a dumping ground for arbitrary JSON.
