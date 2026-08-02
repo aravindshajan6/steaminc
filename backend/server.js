@@ -21,13 +21,21 @@ import {
 } from "./auth.js";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
-const PUBLIC_DIR = join(ROOT, "public");
+
+// In Docker the frontend is a separate nginx container and this path does not exist,
+// so the API serves API only. Running bare with `npm start`, it does exist, and the
+// backend also serves the UI so there is still just one thing to start in dev.
+const PUBLIC_DIR = resolve(ROOT, "..", "frontend", "public");
+const SERVE_STATIC = existsSync(PUBLIC_DIR);
 
 /* ------------------------------------------------------------------ env --- */
 
+// Checks backend/.env first, then the project root. The root copy is the one that
+// matters: docker compose reads its variables from there too, so a single file
+// configures both the containerized and the bare `npm start` path.
 function loadEnv() {
-  const file = join(ROOT, ".env");
-  if (!existsSync(file)) return;
+  const file = [join(ROOT, ".env"), resolve(ROOT, "..", ".env")].find((p) => existsSync(p));
+  if (!file) return;
   for (const raw of readFileSync(file, "utf8").split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
@@ -49,7 +57,11 @@ const DEMO = CREDENTIAL === "";
 
 const TMDB = "https://api.themoviedb.org/3";
 
-const store = new Store(join(ROOT, "data", "accounts.json"));
+// Kept separate from ROOT/data on purpose: that directory holds demo.json, which is
+// baked into the image. Mounting a volume over it would hide the bundled data, so
+// writable state lives somewhere of its own.
+const DATA_DIR = process.env.DATA_DIR || join(ROOT, "data");
+const store = new Store(join(DATA_DIR, "accounts.json"));
 
 /* ----------------------------------------------------------- http helpers --- */
 
@@ -260,6 +272,12 @@ const ROUTES = {
 
   async "/api/free"() {
     return freeRow();
+  },
+
+  // Container healthcheck. Deliberately touches no upstream: this reports whether
+  // the process is alive, not whether TMDB is having a bad day.
+  async "/api/health"() {
+    return { ok: true, mode: DEMO ? "demo" : "live", uptime: Math.round(process.uptime()) };
   },
 
   /* ------------------------------------------------------------- accounts -- */
@@ -487,7 +505,13 @@ const server = createServer(async (req, res) => {
       token,
       user: store.sessionUser(token),
       headers: {},
-      ip: req.socket.remoteAddress || "?",
+      // Behind nginx every request arrives from the proxy's container IP, which would
+      // put every user in ONE login-throttle bucket — one attacker could lock out
+      // everybody. Trusting X-Forwarded-For is safe here precisely because the backend
+      // port is never published: nothing but the proxy can reach it.
+      ip: (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || req.socket.remoteAddress
+        || "?",
       secure: (req.headers["x-forwarded-proto"] || "").includes("https"),
     };
 
@@ -504,6 +528,9 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
+  if (!SERVE_STATIC) {
+    return send(res, 404, { error: "This is the API. The UI is served by the frontend container." });
+  }
   await serveStatic(url.pathname, res);
 });
 

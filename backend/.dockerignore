@@ -1,0 +1,8 @@
+Dockerfile
+.dockerignore
+node_modules
+*.log
+# Never copy local account data or secrets into an image.
+data/accounts.json
+data/accounts.json.tmp
+.env

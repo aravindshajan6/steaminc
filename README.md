@@ -11,11 +11,36 @@ That split is the whole design. TMDB and JustWatch know where everything is lice
 no video; the Archive carries video it has the right to give away. Using both means the app is
 useful for any title and immediately watchable for thousands.
 
+## Run it
+
+**With Docker** — two containers, one published port:
+
 ```bash
-npm start          # → http://localhost:5173
+cp .env.example .env      # add your TMDB key (optional, see below)
+docker compose up --build -d
+                          # → http://localhost:8080
 ```
 
-No dependencies, no build step, no bundler. Node 20+ and a browser.
+**Without Docker** — the backend also serves the UI when run from a checkout:
+
+```bash
+npm start                 # → http://localhost:5173
+```
+
+No npm dependencies, no build step, no bundler. Node 20+ and a browser.
+
+```
+steaminc/
+├── backend/          Node API — TMDB, Archive, accounts. No host port in Docker.
+│   ├── server.js     routing, caching, static fallback for bare mode
+│   ├── archive.js    Internet Archive search, playable-file picking, cross-match
+│   ├── auth.js       scrypt hashing, sessions, rate limiting
+│   └── data/         bundled demo.json (accounts live in a volume, not here)
+├── frontend/         nginx — static files + the only way into the API
+│   ├── public/       index.html, app.js, styles.css
+│   └── nginx.conf    reverse proxy for /api/
+└── docker-compose.yml
+```
 
 ---
 
@@ -38,19 +63,36 @@ The key stays on the server. The browser never sees it.
 ## Architecture
 
 ```
-                          ┌─► api.themoviedb.org   (catalog + JustWatch availability, keyed)
-browser  ──►  server.js ──┤
-   │            │         └─► archive.org          (public-domain video, no key)
-   │            │
-   │            ├── credential lives here only
-   │            ├── TTL cache (feed 10m · search 5m · title 60m · free row 6h)
-   │            ├── fans out N upstream calls per page, returns 1 response
-   │            └── falls back to data/demo.json when TMDB is down or unkeyed
-   │
-   └── public/  vanilla ES modules, no framework
+                    ┌─────────────── private compose network ───────────────┐
+                    │                                                       │
+browser ──► frontend:8080 ──┬── static files (nginx)                        │
+  (only published port)     └── /api/* ──► backend:5173 ──┬─► themoviedb.org│
+                    │                     (no host port)  └─► archive.org   │
+                    └───────────────────────────────────────────────────────┘
 ```
 
-[archive.js](archive.js) is the watchable source. It searches a deliberately narrow set of
+**Only the frontend publishes a port**, and it binds to `127.0.0.1`. The backend declares
+`expose` but no `ports:`, so Docker never binds it to a host interface — the API is reachable
+only from inside the compose network, by name, from nginx. Adding a `ports:` entry to the
+backend would defeat this entirely.
+
+Because the browser talks to the API on its own origin, this also means **no CORS anywhere**,
+and the `HttpOnly` / `SameSite=Lax` session cookie works without special cases. Two things
+follow from putting a proxy in front, both handled:
+
+- The backend reads `X-Forwarded-For` for login throttling. Without it, every request arrives
+  from the proxy's container IP and all users share one rate-limit bucket, so a single attacker
+  could lock out everybody. Trusting that header is safe *precisely because* the backend port is
+  never published — nothing but nginx can reach it.
+- Writable state is mounted at `/app/state`, not `/app/data`, so the volume cannot shadow the
+  `demo.json` baked into the image.
+
+Inside the backend: the TMDB credential lives there and nowhere else, responses are cached with
+per-type TTLs (feed 10m · search 5m · title 60m · free row 6h), each screen fans out N upstream
+calls and returns one response, and everything falls back to `data/demo.json` when TMDB is
+unkeyed or unreachable. The frontend is vanilla ES modules with no framework.
+
+[backend/archive.js](backend/archive.js) is the watchable source. It searches a deliberately narrow set of
 collections (`publicmovies212`, `feature_films`, `prelinger`, `classic_cartoons`) — the Archive
 hosts plenty that is neither public domain nor openly licensed, and this app only points at what
 is free to watch. Per item it picks the best browser-playable derivative, since the "original"
@@ -76,6 +118,7 @@ ever branches on media type.
 
 | Endpoint | Returns |
 |---|---|
+| `GET /api/health` | Liveness for the container healthcheck. Touches no upstream |
 | `GET /api/config` | Demo flag, default region, full watch-provider region list |
 | `GET /api/feed` | Hero pick + rows of cards, one request, free row included |
 | `GET /api/free` | Just the watchable public-domain row |
@@ -150,7 +193,7 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 Sign up with an email and a password and your watchlist follows the account instead of the
 browser. Anything starred while signed out is merged in on your first sign-in rather than being
-dropped. [auth.js](auth.js) has no dependencies:
+dropped. [backend/auth.js](backend/auth.js) has no dependencies:
 
 - **Passwords** are hashed with `scrypt` (N=16384) under a per-user 16-byte random salt, and
   compared with `timingSafeEqual`. Plaintext is never stored or logged.
@@ -170,6 +213,32 @@ dropped. [auth.js](auth.js) has no dependencies:
 verification, password reset, or 2FA. Before this faces a network you would want a real database,
 `Secure` cookies over HTTPS (the flag is already set when `x-forwarded-proto` says https), and a
 verified-email flow.
+
+## Deploying
+
+**GitHub Pages cannot host this.** Pages is a static file host — it serves HTML, CSS and JS and
+runs no server-side code at all. This app needs a running process for three things Pages has no
+way to provide:
+
+1. Keeping the TMDB key secret. On Pages the key would have to ship inside `app.js`, where
+   anyone can read it and use your quota.
+2. Accounts and sessions. There is nothing to hash a password with or store a session in.
+3. The Archive cross-match and caching, which are server-side calls.
+
+You could publish a cut-down static build to Pages — catalog browsing only, key exposed in the
+client, no accounts, no watchlist sync — but that is a different, worse app.
+
+What does work, since the whole thing is now a compose file: anywhere that runs containers.
+**Fly.io**, **Render**, **Railway** and any small VPS all take this as-is. Two changes when you
+put it on a real host:
+
+- Publish the frontend on `0.0.0.0` instead of `127.0.0.1` (drop the prefix in `docker-compose.yml`),
+  and terminate TLS in front of it.
+- Make sure the TLS terminator sends `X-Forwarded-Proto: https`, which flips the session cookie
+  to `Secure` automatically — that code path is already there.
+
+Re-read the warning in **Accounts** before exposing this publicly. The auth system is honest
+local-first work, not production-hardened.
 
 ## Worth adding next
 

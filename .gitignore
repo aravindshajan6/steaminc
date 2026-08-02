@@ -1,5 +1,13 @@
+# Secrets and local state.
+# Patterns are unanchored (no leading slash) so they keep working wherever these
+# files live — a path-anchored rule silently stops matching the moment you move a
+# directory, which is exactly how account data gets committed by accident.
 .env
+.env.local
+
+**/accounts.json
+**/accounts.json.tmp
+
 node_modules/
 *.log
-data/accounts.json
-data/accounts.json.tmp
+.DS_Store

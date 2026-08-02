@@ -1,14 +1,14 @@
 {
   "name": "steaminc",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "STEAMINC — a loud, legal streaming discovery deck built on TMDB + JustWatch availability data.",
-  "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "description": "Legal streaming discovery deck — split backend/frontend, containerized.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev",
+    "up": "docker compose up --build -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "ps": "docker compose ps"
   }
 }

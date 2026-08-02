@@ -1,0 +1,50 @@
+# Two services, one published port.
+#
+#   browser ──► frontend :8080 ──┬── static files (nginx)
+#                                └── /api/* proxied to backend:5173
+#
+# The backend has no `ports:` entry, so Docker never binds it to a host interface.
+# It is reachable only from the private compose network, by name, from the proxy.
+
+services:
+  backend:
+    build: ./backend
+    image: steaminc-backend
+    restart: unless-stopped
+    # No `ports:` — this is the whole point. Adding one would expose the API,
+    # and with it the unauthenticated endpoints, directly to the host network.
+    expose:
+      - "5173"
+    environment:
+      PORT: 5173
+      DATA_DIR: /app/state
+      DEFAULT_REGION: ${DEFAULT_REGION:-US}
+      # Read from the .env file beside this compose file. Never baked into the image.
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+    volumes:
+      # Accounts and sessions survive rebuilds. Mounted at /app/state, NOT /app/data,
+      # so it cannot shadow the demo data baked into the image.
+      - steaminc-state:/app/state
+    networks:
+      - steaminc
+
+  frontend:
+    build: ./frontend
+    image: steaminc-frontend
+    restart: unless-stopped
+    ports:
+      # Host access happens here and nowhere else. 127.0.0.1 binds to loopback only,
+      # so it is not served to the rest of the network; drop the prefix to publish it.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - steaminc
+
+networks:
+  steaminc:
+    driver: bridge
+
+volumes:
+  steaminc-state:
