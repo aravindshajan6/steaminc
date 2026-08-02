@@ -657,6 +657,14 @@ html.chill .hero-dot[aria-selected="true"]::after { animation: none; background:
   background-size: cover; background-position: center;
   display: grid; place-items: center; overflow: hidden;
 }
+/* The <img> fills the frame; badges sit above it via the absolute positioning
+   they already had. object-fit keeps the old background-size:cover behaviour. */
+.card-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+
 .card-art.gen { padding: 14px; }
 .card-art.gen::before {
   content: ""; position: absolute; inset: 0;
