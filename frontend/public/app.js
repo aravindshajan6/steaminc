@@ -367,6 +367,7 @@ function rowHTML(row) {
         <h2 class="row-title glitch" data-text="${esc(row.label)}">${esc(row.label)}</h2>
         <span class="row-tag">${esc(row.tag || "list")}</span>
         <span class="row-rule"></span>
+        ${row.key === "list" ? "" : `<button class="view-all" data-row="${esc(row.key)}" data-label="${esc(row.label)}">View all →</button>`}
       </div>
       <div class="strip">${row.items.map(cardHTML).join("")}</div>
     </section>`;
@@ -391,6 +392,9 @@ function renderRows() {
 
   $("#rows").innerHTML = notice + emptyList + rows.filter((r) => r.items.length).map(rowHTML).join("");
   wireCards();
+  document.querySelectorAll(".view-all").forEach((b) =>
+    b.addEventListener("click", () =>
+      openBrowse({ kind: "row", key: b.dataset.row, name: b.dataset.label })));
 }
 
 function wireCards() {
@@ -698,12 +702,25 @@ function routeFromHash() {
     return openSheet(t[1], id, false);
   }
 
-  const cat = location.hash.match(/^#\/c\/(movie|tv)\/([\d,]+)$/);
-  if (cat) {
-    if (state.cat && state.cat.genre === cat[2]) return;
-    return openCategory(cat[1], cat[2], { push: false });
+  const row = location.hash.match(/^#\/r\/([a-z]+)\/(\d+)$/);
+  if (row) {
+    const page = Number(row[2]);
+    const b = state.browse;
+    if (b?.kind === "row" && b.key === row[1] && b.page === page) return;
+    if (b?.kind === "row" && b.key === row[1]) { b.page = page; return loadBrowse(); }
+    return openBrowse({ kind: "row", key: row[1], page, name: null }, { push: false });
   }
-  if (state.cat && !location.hash.startsWith("#/c/")) closeCategory();
+
+  const cat = location.hash.match(/^#\/c\/(movie|tv)\/([\d,]+)(?:\/(\d+))?$/);
+  if (cat) {
+    const page = Number(cat[3] || 1);
+    const b = state.browse;
+    if (b?.kind === "genre" && b.genre === cat[2] && b.page === page) return;
+    const name = $(`#cats .cat[data-genre="${CSS.escape(cat[2])}"]`)?.dataset.name || "Category";
+    return openBrowse({ kind: "genre", media: cat[1], genre: cat[2], page, name }, { push: false });
+  }
+
+  if (state.browse && !/^#\/(c|r)\//.test(location.hash)) closeBrowse();
 
   const auth = location.hash.match(/^#\/(signin|signup)$/);
   if (auth) {
@@ -883,15 +900,15 @@ function renderCats(genres) {
   const movie = (genres?.movie || []).slice(0, 14);
   if (!movie.length) return;
   $("#cats").innerHTML =
-    `<button class="cat home" data-home="1" aria-current="${!state.cat}">◀ Home</button>` +
+    `<button class="cat home" data-home="1" aria-current="${!state.browse}">◀ Home</button>` +
     `<span class="cat-sep"></span>` +
     movie.map((g) =>
       `<button class="cat" data-genre="${esc(g.id)}" data-name="${esc(g.name)}"
-        aria-current="${state.cat?.genre === String(g.id)}">${esc(g.name)}</button>`).join("");
+        aria-current="${state.browse?.genre === String(g.id)}">${esc(g.name)}</button>`).join("");
 
   $("#cats").querySelectorAll(".cat").forEach((b) =>
     b.addEventListener("click", () => {
-      if (b.dataset.home) return closeCategory();
+      if (b.dataset.home) return closeBrowse();
       location.hash = `/c/movie/${b.dataset.genre}`;
     }));
 }
@@ -899,72 +916,117 @@ function renderCats(genres) {
 function markCat() {
   $("#cats").querySelectorAll(".cat").forEach((b) => {
     b.setAttribute("aria-current",
-      String(b.dataset.home ? !state.cat : state.cat?.genre === b.dataset.genre));
+      String(b.dataset.home ? !state.browse : state.browse?.genre === b.dataset.genre));
   });
 }
 
-async function openCategory(media, genre, { sort = "popularity.desc", push = true } = {}) {
-  const name = $(`#cats .cat[data-genre="${CSS.escape(genre)}"]`)?.dataset.name || "Category";
-  state.cat = { media, genre: String(genre), sort, page: 1, name, items: [] };
-  if (push) location.hash = `/c/${media}/${genre}`;
+// One browse view serves both kinds of listing: a homepage row expanded in full,
+// and a genre. They differ only in which endpoint fills the grid.
+async function openBrowse(desc, { push = true } = {}) {
+  state.browse = { page: 1, sort: "popularity.desc", items: [], ...desc };
+  const b = state.browse;
 
-  $("#hero").hidden = true;          // the carousel is a homepage thing
+  if (push) {
+    location.hash = b.kind === "row"
+      ? `/r/${b.key}/${b.page}`
+      : `/c/${b.media}/${b.genre}/${b.page}`;
+  }
+
+  $("#hero").hidden = true;            // the carousel belongs to the homepage
   clearTimeout(state.heroTimer);
   markCat();
-  $("#rows").innerHTML = `<div class="cat-head"><h2 class="cat-title">${esc(name)}</h2></div>
-    <div class="grid">${skelCard.repeat(12)}</div>`;
+  $("#rows").innerHTML =
+    `<div class="cat-head"><h2 class="cat-title">${esc(b.name || "Browse")}</h2></div>
+     <div class="grid">${skelCard.repeat(12)}</div>`;
   window.scrollTo({ top: 0, behavior: "instant" });
 
-  await loadCategoryPage(true);
+  await loadBrowse();
 }
 
-async function loadCategoryPage(first = false) {
-  const c = state.cat;
-  if (!c) return;
+async function loadBrowse() {
+  const b = state.browse;
+  if (!b) return;
   try {
-    const data = await api("/api/category", { media: c.media, genre: c.genre, page: c.page, sort: c.sort });
-    c.items = first ? data.items : [...c.items, ...data.items];
-    c.totalPages = data.totalPages || 1;
-    renderCategory();
+    const data = b.kind === "row"
+      ? await api("/api/row", { key: b.key, page: b.page })
+      : await api("/api/category", { media: b.media, genre: b.genre, page: b.page, sort: b.sort });
+
+    // A slow page that resolves after the user has moved on must not overwrite.
+    if (state.browse !== b) return;
+    b.items = data.items || [];
+    b.totalPages = data.totalPages || 1;
+    b.name = b.name || data.label;
+    renderBrowse();
   } catch {
-    $("#rows").innerHTML = `<div class="notice">Could not load that category. Try another.</div>`;
+    $("#rows").innerHTML = `<div class="notice">Could not load that list. Try another.</div>`;
   }
 }
 
-function renderCategory() {
-  const c = state.cat;
-  if (!c) return;
-  const more = c.page < c.totalPages;
-  $("#rows").innerHTML = `
-    <div class="cat-head">
-      <h2 class="cat-title glitch" data-text="${esc(c.name)}">${esc(c.name)}</h2>
-      <span class="row-tag">${c.items.length} titles</span>
-      <select class="cat-sort" id="catSort" aria-label="Sort">
-        ${SORTS.map(([v, l]) => `<option value="${v}"${v === c.sort ? " selected" : ""}>${l}</option>`).join("")}
-      </select>
-    </div>
-    <div class="grid">${c.items.map(cardHTML).join("")}</div>
-    ${more ? `<div class="more-wrap"><button class="btn" id="loadMore">Load more →</button></div>` : ""}`;
+// Windowed pager: first, last, and a few either side of the current page, so 100
+// pages do not produce 100 buttons.
+function pagerHTML(page, total) {
+  if (total < 2) return "";
+  const nums = new Set([1, total, page]);
+  for (let d = 1; d <= 2; d++) {
+    if (page - d > 0) nums.add(page - d);
+    if (page + d <= total) nums.add(page + d);
+  }
+  const sorted = [...nums].sort((a, z) => a - z);
 
-  wireCards();
-  $("#catSort").onchange = (e) => {
-    c.sort = e.target.value;
-    c.page = 1;
-    loadCategoryPage(true);
-  };
-  const btn = $("#loadMore");
-  if (btn) btn.onclick = async () => {
-    btn.textContent = "Loading…";
-    btn.disabled = true;
-    c.page += 1;
-    await loadCategoryPage(false);
-  };
+  let out = `<button class="pg-step" data-page="${page - 1}" ${page === 1 ? "disabled" : ""}>‹ Prev</button>`;
+  let prev = 0;
+  for (const n of sorted) {
+    if (n - prev > 1) out += `<span class="pg-gap">…</span>`;
+    out += `<button class="pg-num" data-page="${n}" aria-current="${n === page}">${n}</button>`;
+    prev = n;
+  }
+  out += `<button class="pg-step" data-page="${page + 1}" ${page >= total ? "disabled" : ""}>Next ›</button>`;
+  return `<nav class="pager" aria-label="Pages">${out}</nav>`;
 }
 
-function closeCategory() {
-  if (!state.cat) return;
-  state.cat = null;
-  if (location.hash.startsWith("#/c/")) history.pushState("", document.title, location.pathname);
+function renderBrowse() {
+  const b = state.browse;
+  if (!b) return;
+
+  $("#rows").innerHTML = `
+    <div class="cat-head">
+      <h2 class="cat-title glitch" data-text="${esc(b.name)}">${esc(b.name)}</h2>
+      <span class="row-tag">page ${b.page} of ${b.totalPages}</span>
+      ${b.kind === "genre" ? `
+        <select class="cat-sort" id="catSort" aria-label="Sort">
+          ${SORTS.map(([v, l]) => `<option value="${v}"${v === b.sort ? " selected" : ""}>${l}</option>`).join("")}
+        </select>` : ""}
+    </div>
+    <div class="grid">${b.items.map(cardHTML).join("")}</div>
+    ${pagerHTML(b.page, b.totalPages)}`;
+
+  wireCards();
+
+  const sort = $("#catSort");
+  if (sort) sort.onchange = (e) => { b.sort = e.target.value; b.page = 1; goPage(1); };
+
+  document.querySelectorAll(".pager [data-page]").forEach((el) =>
+    el.addEventListener("click", () => goPage(Number(el.dataset.page))));
+}
+
+async function goPage(n) {
+  const b = state.browse;
+  if (!b || n < 1 || n > b.totalPages || n === b.page) return;
+  b.page = n;
+  location.hash = b.kind === "row"
+    ? `/r/${b.key}/${n}`
+    : `/c/${b.media}/${b.genre}/${n}`;
+  $("#rows").innerHTML =
+    `<div class="cat-head"><h2 class="cat-title">${esc(b.name)}</h2></div>
+     <div class="grid">${skelCard.repeat(12)}</div>`;
+  window.scrollTo({ top: 0, behavior: "instant" });
+  await loadBrowse();
+}
+
+function closeBrowse() {
+  if (!state.browse) return;
+  state.browse = null;
+  if (/^#\/(c|r)\//.test(location.hash)) history.pushState("", document.title, location.pathname);
   markCat();
   startHeroCarousel(state.feed?.heroes?.length ? state.feed.heroes : [state.feed?.hero]);
   renderRows();
