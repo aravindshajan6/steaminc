@@ -77,6 +77,7 @@ export class Store {
       this.data = JSON.parse(await readFile(this.file, "utf8"));
       this.data.users ||= [];
       this.data.sessions ||= {};
+      this.data.comments ||= [];
       this.sweep();
     } catch (err) {
       console.warn("[auth] could not read store, starting empty:", err.message);
@@ -171,6 +172,35 @@ export class Store {
     user.name = name;
     await this.save();
     return user;
+  }
+
+  /* ------------------------------------------------------------ comments -- */
+
+  async listComments(target, limit = 100) {
+    return (this.data.comments || [])
+      .filter((c) => c.target === target)
+      .sort((a, b) => (a.created < b.created ? 1 : -1))
+      .slice(0, limit);
+  }
+
+  async addComment(comment) {
+    this.data.comments ||= [];
+    this.data.comments.push(comment);
+    await this.save();
+    return comment;
+  }
+
+  async deleteComment(id, userId) {
+    this.data.comments ||= [];
+    const before = this.data.comments.length;
+    // The userId predicate is the authorization check, not just a filter.
+    this.data.comments = this.data.comments.filter((c) => !(c.id === id && c.userId === userId));
+    await this.save();
+    return this.data.comments.length < before;
+  }
+
+  async countComments(userId) {
+    return (this.data.comments || []).filter((c) => c.userId === userId).length;
   }
 
   async deleteUser(userId) {

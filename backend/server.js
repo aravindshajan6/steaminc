@@ -10,6 +10,7 @@
  */
 
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
@@ -414,6 +415,51 @@ const ROUTES = {
 
   async "/api/auth/me"(params, ctx) {
     return { user: publicUser(ctx.user), list: ctx.user?.list || [] };
+  },
+
+  // Comments are per-title and tied to an account. Reading is open; writing is not.
+  async "/api/comments"(params, ctx) {
+    const media = ["movie", "tv", "free"].includes(params.get("media")) ? params.get("media") : null;
+    const id = params.get("id");
+    if (!media || !id) throw Object.assign(new Error("media and id are required."), { status: 400 });
+    const target = `${media}:${String(id).slice(0, 200)}`;
+
+    if (ctx.req.method === "GET") {
+      const comments = await store.listComments(target);
+      // Tell the client which ones it may delete, so the UI never offers a button
+      // the server would refuse.
+      return { comments: comments.map((c) => ({ ...c, mine: c.userId === ctx.user?.id })) };
+    }
+
+    if (ctx.req.method === "DELETE") {
+      const user = requireUser(ctx);
+      const removed = await store.deleteComment(String(params.get("commentId") || ""), user.id);
+      if (!removed) throw Object.assign(new Error("That comment is not yours to delete."), { status: 403 });
+      return { ok: true };
+    }
+
+    requireMethod(ctx, "POST");
+    const user = requireUser(ctx);
+    const body = await readJson(ctx.req);
+    const text = String(body.body || "").trim().replace(/\s+\n/g, "\n").slice(0, 1000);
+    if (text.length < 2) throw Object.assign(new Error("Say a little more than that."), { status: 400 });
+
+    // Light cooldown per user — enough to stop a runaway script, not enough to
+    // interrupt a person typing two thoughts in a row.
+    const wait = throttle(`comment:${user.id}`);
+    if (wait) throw Object.assign(new Error("You are posting very fast. Give it a minute."), { status: 429 });
+
+    const comment = {
+      id: randomUUID(),
+      target,
+      userId: user.id,
+      // Denormalized so a comment still renders after the author renames or leaves.
+      userName: user.name,
+      body: text,
+      created: new Date().toISOString(),
+    };
+    await store.addComment(comment);
+    return { comment: { ...comment, mine: true } };
   },
 
   async "/api/auth/profile"(params, ctx) {

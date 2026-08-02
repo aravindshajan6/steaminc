@@ -433,6 +433,102 @@ function attachTilt(el) {
 
 /* ------------------------------------------------------------------ hero -- */
 
+/* ---------------------------------------------------------------- comments -- */
+
+const timeAgo = (iso) => {
+  const secs = Math.max(1, Math.round((Date.now() - new Date(iso)) / 1000));
+  const steps = [[60, "s"], [60, "m"], [24, "h"], [7, "d"], [4.35, "w"], [12, "mo"]];
+  let v = secs, unit = "s";
+  for (const [div, label] of steps) {
+    if (v < div) break;
+    v = Math.round(v / div);
+    unit = label;
+  }
+  return `${v}${unit} ago`;
+};
+
+function commentHTML(c) {
+  return `
+    <li class="cmt" data-id="${esc(c.id)}">
+      <div class="cmt-head">
+        <span class="cmt-who">${esc(c.userName || "someone")}</span>
+        <span class="cmt-when">${esc(timeAgo(c.created))}</span>
+        ${c.mine ? `<button class="cmt-del" data-del="${esc(c.id)}" aria-label="Delete your comment">✕</button>` : ""}
+      </div>
+      <p class="cmt-body">${esc(c.body)}</p>
+    </li>`;
+}
+
+function renderComments(list) {
+  const box = $("#cmtList");
+  if (!box) return;
+  box.innerHTML = list.length
+    ? list.map(commentHTML).join("")
+    : `<li class="cmt-empty">No one has said anything yet. Go first.</li>`;
+
+  box.querySelectorAll("[data-del]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        await post(`/api/comments?commentId=${encodeURIComponent(b.dataset.del)}&media=${state.open.media}&id=${encodeURIComponent(state.open.id)}`, "DELETE");
+        state.comments = state.comments.filter((c) => c.id !== b.dataset.del);
+        renderComments(state.comments);
+        toast("comment removed");
+      } catch (err) {
+        toast(err.message);
+        b.disabled = false;
+      }
+    }));
+}
+
+async function loadComments(media, id) {
+  try {
+    const { comments } = await api("/api/comments", { media, id });
+    // The sheet may have moved on while this was in flight.
+    if (!state.open || String(state.open.id) !== String(id)) return;
+    state.comments = comments;
+    renderComments(comments);
+    const n = $("#cmtCount");
+    if (n) n.textContent = comments.length;
+  } catch {
+    const box = $("#cmtList");
+    if (box) box.innerHTML = `<li class="cmt-empty">Comments are unavailable right now.</li>`;
+  }
+}
+
+async function submitComment(e) {
+  e.preventDefault();
+  const input = $("#cmtInput");
+  const body = input.value.trim();
+  if (body.length < 2) return;
+
+  const btn = $("#cmtSend");
+  btn.disabled = true;
+  try {
+    const { comment } = await post("/api/comments?media=" + state.open.media + "&id=" + encodeURIComponent(state.open.id), "POST", { body });
+    state.comments = [comment, ...(state.comments || [])];
+    input.value = "";
+    renderComments(state.comments);
+    $("#cmtCount").textContent = state.comments.length;
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const commentsSection = () => `
+  <div class="sec-cap">Comments <span id="cmtCount">0</span></div>
+  ${state.user
+    ? `<form class="cmt-form" id="cmtForm">
+         <textarea id="cmtInput" maxlength="1000" rows="2" placeholder="What did you make of it?"></textarea>
+         <button class="btn btn-primary" id="cmtSend" type="submit">Post</button>
+       </form>`
+    : `<p class="cmt-signin">
+         <button class="btn" id="cmtSignIn">Sign in to comment</button>
+       </p>`}
+  <ul class="cmt-list" id="cmtList"><li class="cmt-empty">Loading…</li></ul>`;
+
 /* ---------------------------------------------------------- hero carousel -- */
 
 const HERO_MS = 7000;
@@ -760,9 +856,14 @@ function renderSheet(d) {
         <div class="sec-cap">If you liked that</div>
         <div class="strip" style="padding-left:0;padding-right:0">${d.recommendations.map(cardHTML).join("")}</div>
       </div>` : ""}
+
+    <div class="cmt-wrap">${commentsSection()}</div>
   `;
 
   $("#sheetSave").onclick = () => { toggleSave(d); $("#sheetSave").innerHTML = `★ ${saved(d) ? "Saved" : "Save it"}`; };
+  if ($("#cmtForm")) $("#cmtForm").addEventListener("submit", submitComment);
+  if ($("#cmtSignIn")) $("#cmtSignIn").onclick = () => openAuth("in");
+  loadComments(d.media, d.id);
   $("#sheetBody").querySelector("[data-free]")?.addEventListener("click", (e) =>
     openSheet("free", e.currentTarget.dataset.free));
   wireCards();
