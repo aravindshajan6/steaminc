@@ -164,6 +164,24 @@ export class Store {
     await this.save();
     return user.list;
   }
+
+  async rename(userId, name) {
+    const user = this.userById(userId);
+    if (!user) return null;
+    user.name = name;
+    await this.save();
+    return user;
+  }
+
+  async deleteUser(userId) {
+    this.data.users = this.data.users.filter((u) => u.id !== userId);
+    // Drop every session for that user, not just the current one — a deleted
+    // account must not stay signed in on another device.
+    for (const [token, s] of Object.entries(this.data.sessions)) {
+      if (s.userId === userId) delete this.data.sessions[token];
+    }
+    await this.save();
+  }
 }
 
 /* ------------------------------------------------------------ validation --- */
@@ -254,6 +272,7 @@ export function clearCookie() {
   return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-export const publicUser = (u) => (u ? { id: u.id, email: u.email, name: u.name } : null);
+export const publicUser = (u) =>
+  u ? { id: u.id, email: u.email, name: u.name, created: u.created || null } : null;
 
 export { join as joinPath };
