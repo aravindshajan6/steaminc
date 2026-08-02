@@ -185,8 +185,21 @@ kbd {
 .field select {
   font: 800 12px/1 var(--mono);
   background: var(--ink-2); color: var(--paper);
-  border: var(--edge); padding: 8px 10px; cursor: pointer;
+  border: var(--edge); padding: 8px 28px 8px 10px; cursor: pointer;
+  /* A width floor matters: the list arrives async, and an empty select collapses
+     to a few unusable pixels. The cap stops long country names stretching the bar. */
+  min-width: 168px; max-width: 220px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--acid) 50%),
+                    linear-gradient(135deg, var(--acid) 50%, transparent 50%);
+  background-position: right 13px top 55%, right 8px top 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
 }
+.field select:hover { border-color: var(--acid); }
+.field select optgroup { background: var(--ink); color: var(--dim); font-style: normal; }
+.field select option { background: var(--ink-2); color: var(--paper); }
 
 /* ------------------------------------------------------------------ hero -- */
 
