@@ -246,11 +246,18 @@ function tmdbFeed() {
 
 const ROUTES = {
   async "/api/config"() {
+    // A transient TMDB blip used to take this whole endpoint down with it, which
+    // left the UI with zero regions and a collapsed, unusable select. The region
+    // list is the least volatile data we fetch, so fall back to the bundled one
+    // rather than fail — a stale list beats no list.
     const regions = DEMO
       ? demo().regions
       : await cached("regions", 864e5, async () => {
           const data = await tmdb("/watch/providers/regions");
           return (data.results || []).map((r) => ({ code: r.iso_3166_1, name: r.english_name }));
+        }).catch((err) => {
+          console.warn("[config] region list unavailable, using bundled:", err.message);
+          return demo().regions;
         });
     return { demo: DEMO, defaultRegion: DEFAULT_REGION, regions };
   },

@@ -610,6 +610,39 @@ function renderSheet(d) {
   $("#sheetWrap").scrollTop = 0;
 }
 
+/* ---------------------------------------------------------------- regions -- */
+
+// TMDB returns 200+ countries alphabetically, which buries the handful anyone
+// actually picks. These float to the top; the rest stay browsable underneath.
+const COMMON_REGIONS = ["US", "GB", "CA", "AU", "IN", "DE", "FR", "JP", "BR", "ES", "IT", "MX"];
+
+function renderRegions(config) {
+  const all = config.regions || [];
+  const sel = $("#region");
+
+  if (!all.length) {
+    // Never leave an empty select — it collapses to a sliver and looks broken.
+    sel.innerHTML = `<option value="${esc(state.region)}">${esc(state.region)} — unavailable</option>`;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+
+  // Keep the user's saved region only if this list actually has it.
+  state.region = all.some((r) => r.code === state.region) ? state.region : config.defaultRegion;
+
+  const opt = (r) =>
+    `<option value="${esc(r.code)}"${r.code === state.region ? " selected" : ""}>${esc(r.code)} — ${esc(r.name)}</option>`;
+
+  const common = COMMON_REGIONS.map((c) => all.find((r) => r.code === c)).filter(Boolean);
+  const rest = all.filter((r) => !COMMON_REGIONS.includes(r.code));
+
+  sel.innerHTML =
+    (common.length ? `<optgroup label="Common">${common.map(opt).join("")}</optgroup>` : "") +
+    `<optgroup label="All countries">${rest.map(opt).join("")}</optgroup>`;
+  sel.title = `Watch providers for ${all.find((r) => r.code === state.region)?.name || state.region}`;
+}
+
 /* ------------------------------------------------------------------ chill -- */
 
 function setChill(on) {
@@ -650,10 +683,7 @@ async function boot() {
   renderAccount();
 
   state.config = config;
-  state.region = config.regions.some((r) => r.code === state.region) ? state.region : config.defaultRegion;
-  $("#region").innerHTML = config.regions
-    .map((r) => `<option value="${r.code}" ${r.code === state.region ? "selected" : ""}>${esc(r.code)} — ${esc(r.name)}</option>`)
-    .join("");
+  renderRegions(config);
 
   if (!feed) {
     $("#rows").innerHTML = `<div class="notice">Server unreachable. Is <code>npm start</code> still running?</div>`;
