@@ -172,14 +172,30 @@ export class Store {
 // mail reaches it, and this app never sends any.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Composition rules live here, next to the hashing, so the server is the authority.
+// The signup form checks the same rules live, but that is a courtesy to the user —
+// anything posting straight to the API is held to exactly this.
+export const PASSWORD_RULES = [
+  { key: "len", label: `${MIN_PASSWORD}+ characters`, test: (p) => p.length >= MIN_PASSWORD },
+  { key: "alpha", label: "a letter", test: (p) => /\p{L}/u.test(p) },
+  { key: "num", label: "a number", test: (p) => /\d/.test(p) },
+  { key: "special", label: "a symbol", test: (p) => /[^\p{L}\d]/u.test(p) },
+];
+
+export function checkPassword(password) {
+  const p = String(password || "");
+  if (p.length > 200) return "That password is too long.";
+  const failed = PASSWORD_RULES.filter((r) => !r.test(p));
+  if (!failed.length) return null;
+  return `Password needs ${failed.map((r) => r.label).join(", ")}.`;
+}
+
 export function validate({ email, password, name }) {
   const e = String(email || "").trim();
   if (!EMAIL.test(e)) return "That does not look like an email address.";
   if (e.length > 190) return "That email is too long.";
-  if (String(password || "").length < MIN_PASSWORD) {
-    return `Password needs at least ${MIN_PASSWORD} characters.`;
-  }
-  if (String(password).length > 200) return "That password is too long.";
+  const pw = checkPassword(password);
+  if (pw) return pw;
   if (name && String(name).length > 60) return "That name is too long.";
   return null;
 }
