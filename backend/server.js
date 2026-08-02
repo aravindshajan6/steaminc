@@ -16,9 +16,10 @@ import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveMatch, archiveSearch, archiveTitle } from "./archive.js";
 import {
-  Store, validate, throttle, clearThrottle,
+  validate, throttle, clearThrottle,
   COOKIE, parseCookies, sessionCookie, clearCookie, publicUser,
 } from "./auth.js";
+import { createStore } from "./store.js";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -61,7 +62,11 @@ const TMDB = "https://api.themoviedb.org/3";
 // baked into the image. Mounting a volume over it would hide the bundled data, so
 // writable state lives somewhere of its own.
 const DATA_DIR = process.env.DATA_DIR || join(ROOT, "data");
-const store = new Store(join(DATA_DIR, "accounts.json"));
+const { store, kind: STORE_KIND } = createStore({
+  mongoUri: process.env.MONGODB_URI,
+  dbName: process.env.MONGODB_DB || "steaminc",
+  dataDir: DATA_DIR,
+});
 
 /* ----------------------------------------------------------- http helpers --- */
 
@@ -287,7 +292,7 @@ const ROUTES = {
     const body = await readJson(ctx.req);
     const problem = validate(body);
     if (problem) throw Object.assign(new Error(problem), { status: 400 });
-    if (store.userByEmail(body.email)) {
+    if (await store.userByEmail(body.email)) {
       throw Object.assign(new Error("An account with that email already exists."), { status: 409 });
     }
     const user = await store.createUser(body);
@@ -306,7 +311,7 @@ const ROUTES = {
       throw Object.assign(new Error(`Too many attempts. Try again in ${minutes} minute(s).`), { status: 429 });
     }
 
-    const user = store.userByEmail(email);
+    const user = await store.userByEmail(email);
     // Hash even when the account does not exist, so response time cannot be used to
     // discover which emails are registered.
     const ok = user
@@ -503,7 +508,7 @@ const server = createServer(async (req, res) => {
       req,
       res,
       token,
-      user: store.sessionUser(token),
+      user: await store.sessionUser(token),
       headers: {},
       // Behind nginx every request arrives from the proxy's container IP, which would
       // put every user in ONE login-throttle bucket — one attacker could lock out
@@ -534,12 +539,28 @@ const server = createServer(async (req, res) => {
   await serveStatic(url.pathname, res);
 });
 
-await store.load();
+// A misconfigured database should fail loudly at boot, not on the first signup.
+try {
+  await store.load();
+} catch (err) {
+  console.error(`\n  ✖ storage (${STORE_KIND}) failed to start: ${err.message}\n`);
+  process.exit(1);
+}
+
+const accounts = await store.count();
 
 server.listen(PORT, () => {
   const mode = DEMO
     ? "DEMO MODE — bundled sample data (add TMDB_API_KEY to .env for the real catalog)"
     : `LIVE — TMDB via ${IS_BEARER ? "v4 bearer token" : "v3 api key"}`;
-  const who = `${store.data.users.length} account(s) registered`;
+  const who = `${accounts} account(s) · storage: ${STORE_KIND}`;
   console.log(`\n  ▓▓ STEAMINC  ▓▓  http://localhost:${PORT}\n  ${mode}\n  ${who}\n`);
 });
+
+// Close the pool on shutdown so Mongo does not hold a connection slot after exit.
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, async () => {
+    await store.close?.().catch(() => {});
+    process.exit(0);
+  });
+}

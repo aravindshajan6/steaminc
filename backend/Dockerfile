@@ -9,7 +9,11 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY package.json ./
-COPY server.js archive.js auth.js ./
+# Installs the mongodb driver (the only dependency, and an optional one). Cached as
+# its own layer so editing source does not reinstall it.
+RUN npm install --omit=dev --no-audit --no-fund
+
+COPY server.js archive.js auth.js store.js mongo-store.js ./
 COPY data ./data
 
 # Writable state (accounts, sessions) lives outside /app/data so a mounted volume

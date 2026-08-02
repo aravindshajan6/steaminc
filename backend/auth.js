@@ -22,6 +22,43 @@ const hash = (password, salt) =>
     ),
   );
 
+/* ------------------------------------------------- shared password helpers --- */
+/* Exported so every storage backend hashes and compares identically. The rules
+   for handling a password should not depend on where the row happens to live.  */
+
+export const SESSION_TTL_MS = SESSION_DAYS * 864e5;
+
+export async function newCredential(password) {
+  const salt = randomBytes(16);
+  const key = await hash(password, salt);
+  return { salt: salt.toString("hex"), hash: key.toString("hex") };
+}
+
+export async function verifyPassword(record, password) {
+  if (!record?.salt || !record?.hash) return false;
+  const key = await hash(password, Buffer.from(record.salt, "hex"));
+  const known = Buffer.from(record.hash, "hex");
+  // Lengths always match here, but timingSafeEqual throws if they ever differ.
+  return key.length === known.length && timingSafeEqual(key, known);
+}
+
+export const newSessionToken = () => randomBytes(32).toString("base64url");
+
+export const newUserId = () => randomUUID();
+
+export function shapeUser({ email, name, salt, hash: pwHash }) {
+  const e = String(email).trim().toLowerCase();
+  return {
+    id: newUserId(),
+    email: e,
+    name: String(name || "").trim().slice(0, 60) || e.split("@")[0],
+    salt,
+    hash: pwHash,
+    created: new Date().toISOString(),
+    list: [],
+  };
+}
+
 /* ---------------------------------------------------------------- store --- */
 
 export class Store {
@@ -78,41 +115,30 @@ export class Store {
     return this.data.users.find((u) => u.email === e) || null;
   }
 
+  async count() {
+    return this.data.users.length;
+  }
+
   async createUser({ email, password, name }) {
-    const salt = randomBytes(16);
-    const key = await hash(password, salt);
-    const user = {
-      id: randomUUID(),
-      email: String(email).trim().toLowerCase(),
-      name: String(name || "").trim().slice(0, 60) || String(email).split("@")[0],
-      salt: salt.toString("hex"),
-      hash: key.toString("hex"),
-      created: new Date().toISOString(),
-      list: [],
-    };
+    const cred = await newCredential(password);
+    const user = shapeUser({ email, name, ...cred });
     this.data.users.push(user);
     await this.save();
     return user;
   }
 
   async verify(user, password) {
-    const key = await hash(password, Buffer.from(user.salt, "hex"));
-    const known = Buffer.from(user.hash, "hex");
-    // Lengths always match here, but timingSafeEqual throws if they ever differ.
-    return key.length === known.length && timingSafeEqual(key, known);
+    return verifyPassword(user, password);
   }
 
   async startSession(userId) {
-    const token = randomBytes(32).toString("base64url");
-    this.data.sessions[token] = {
-      userId,
-      expires: Date.now() + SESSION_DAYS * 864e5,
-    };
+    const token = newSessionToken();
+    this.data.sessions[token] = { userId, expires: Date.now() + SESSION_TTL_MS };
     await this.save();
     return token;
   }
 
-  sessionUser(token) {
+  async sessionUser(token) {
     if (!token) return null;
     const s = this.data.sessions[token];
     if (!s) return null;

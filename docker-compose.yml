@@ -21,6 +21,12 @@ services:
       DEFAULT_REGION: ${DEFAULT_REGION:-US}
       # Read from the .env file beside this compose file. Never baked into the image.
       TMDB_API_KEY: ${TMDB_API_KEY:-}
+      # Unset  -> accounts live in a JSON file on the volume below.
+      # Set    -> accounts live in Mongo and the volume is unused.
+      # `docker compose --profile mongo up` starts the local mongo service and
+      # points at it; an Atlas connection string works here just as well.
+      MONGODB_URI: ${MONGODB_URI:-}
+      MONGODB_DB: ${MONGODB_DB:-steaminc}
     volumes:
       # Accounts and sessions survive rebuilds. Mounted at /app/state, NOT /app/data,
       # so it cannot shadow the demo data baked into the image.
@@ -42,9 +48,29 @@ services:
     networks:
       - steaminc
 
+  # Local Mongo for trying the database path without an Atlas account.
+  # Off by default: `docker compose --profile mongo up -d`
+  # It publishes no port either — only the backend needs to reach it.
+  mongo:
+    image: mongo:7
+    profiles: ["mongo"]
+    restart: unless-stopped
+    expose:
+      - "27017"
+    volumes:
+      - steaminc-mongo:/data/db
+    networks:
+      - steaminc
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 networks:
   steaminc:
     driver: bridge
 
 volumes:
   steaminc-state:
+  steaminc-mongo:

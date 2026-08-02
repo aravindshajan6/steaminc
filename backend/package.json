@@ -1,8 +1,8 @@
 {
-  "name": "steaminc",
-  "version": "1.0.0",
+  "name": "steaminc-backend",
+  "version": "2.1.0",
   "private": true,
-  "description": "STEAMINC — a loud, legal streaming discovery deck built on TMDB + JustWatch availability data.",
+  "description": "STEAMINC API — TMDB + Internet Archive discovery, accounts, watchlists.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -10,5 +10,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
+  },
+  "//": "The ONLY dependency, and only needed if you set MONGODB_URI. It is imported dynamically, so with file storage the app still runs from a fresh clone with no npm install.",
+  "optionalDependencies": {
+    "mongodb": "^6.12.0"
   }
 }

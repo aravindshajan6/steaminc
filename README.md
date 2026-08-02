@@ -27,7 +27,9 @@ docker compose up --build -d
 npm start                 # → http://localhost:5173
 ```
 
-No npm dependencies, no build step, no bundler. Node 20+ and a browser.
+No build step, no bundler, and no npm install needed — Node 20+ and a browser. There is exactly
+one dependency, `mongodb`, it is optional, and it is imported dynamically, so it is only ever
+required if you set `MONGODB_URI`.
 
 ```
 steaminc/
@@ -208,11 +210,43 @@ dropped. [backend/auth.js](backend/auth.js) has no dependencies:
 - Writes go through a promise queue and a temp-file rename, so concurrent updates can neither
   interleave nor leave a half-written file.
 
-⚠️ **This is a local-first setup, not a production auth system.** Accounts live in
-`data/accounts.json` (gitignored), sessions are in that same file, and there is no email
-verification, password reset, or 2FA. Before this faces a network you would want a real database,
-`Secure` cookies over HTTPS (the flag is already set when `x-forwarded-proto` says https), and a
-verified-email flow.
+⚠️ **This is not a production auth system.** There is no email verification, no password reset
+and no 2FA. Before it faces real users you would want all three. `Secure` cookies are already
+handled — the flag flips automatically when `x-forwarded-proto` says https.
+
+### Where accounts are stored
+
+Two backends behind one interface, chosen by whether `MONGODB_URI` is set. `server.js` never
+knows which it is talking to.
+
+| | **File** (default) | **MongoDB** |
+|---|---|---|
+| Set up | nothing | `MONGODB_URI` |
+| Location | `accounts.json` under `DATA_DIR` | `users` + `sessions` collections |
+| Survives a container with no disk | ✗ | ✓ |
+| Shared by multiple instances | ✗ | ✓ |
+| Duplicate-email race | possible | impossible (unique index) |
+| Expired session cleanup | manual sweep | TTL index, automatic |
+
+The file store is the right default: no install, no service, no network. Reach for Mongo when
+the filesystem is not durable — **Render's free plan, which has no persistent disk** — or when
+more than one instance needs the same accounts.
+
+Two things Mongo genuinely fixes rather than just relocating. The file store checked "does this
+email exist" and then wrote, which is a race: five concurrent signups for one address could all
+pass the check. A unique index makes that impossible, and the duplicate-key error is translated
+back into the normal "already exists" message. And sessions get a TTL index, so Mongo expires
+them itself instead of relying on a sweep that could be forgotten.
+
+Try it locally without an Atlas account — this starts a Mongo container that publishes no port
+either:
+
+```bash
+MONGODB_URI=mongodb://mongo:27017 docker compose --profile mongo up -d --build
+```
+
+The startup banner tells you which backend is live: `storage: file` or `storage: mongodb`.
+A misconfigured database fails loudly at boot rather than on the first signup.
 
 ## Deploying
 
@@ -238,11 +272,15 @@ split can't work there — nginx would have no private way to reach the API. Use
 (the same fallback that makes bare `npm start` work). [render.yaml](render.yaml) is a ready
 blueprint: point Render at the repo, set `TMDB_API_KEY` in the dashboard, deploy.
 
-**The caveat:** free services get no persistent disk, so `/app/state` is ephemeral. **Accounts
-and watchlists are wiped on every deploy and every spin-down.** Discovery, search, watch
-providers and the Archive player all work fine — only the account system is affected. If you
-want durable accounts, either move to a paid instance with a disk, or port `auth.js` from its
-JSON file to Render's managed Postgres.
+**The caveat, and its fix:** free services get no persistent disk, so `/app/state` is ephemeral
+and file-stored accounts are wiped on every deploy and spin-down. Set `MONGODB_URI` to a free
+[Atlas cluster](https://www.mongodb.com/pricing) (512 MB, permanently free) and the problem
+disappears — state lives outside the container, so it survives being destroyed entirely. Free
+Render services can't *receive* private network traffic, but they can freely *make* outbound
+connections, which is all Atlas needs.
+
+Add `MONGODB_URI` in the Render dashboard alongside `TMDB_API_KEY`, and allow Render's outbound
+IPs in Atlas's network access list (or `0.0.0.0/0` if you are only testing).
 
 Also expect the service to spin down after 15 minutes of no traffic and take about a minute to
 wake. The health check does not prevent this; only inbound traffic does.

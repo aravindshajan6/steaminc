@@ -19,9 +19,16 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
-      # sync: false means "prompt me in the dashboard" — the key is never written
-      # to this file and never reaches the repo.
+      # sync: false means "prompt me in the dashboard" — these are never written to
+      # this file and never reach the repo.
       - key: TMDB_API_KEY
+        sync: false
+      # Strongly recommended here. Without it accounts go to the ephemeral filesystem
+      # and vanish on every restart. A free Atlas cluster fixes that: free Render
+      # services cannot RECEIVE private traffic but can freely MAKE outbound
+      # connections, which is all Atlas needs.
+      #   mongodb+srv://user:pass@cluster.xxxxx.mongodb.net/?retryWrites=true&w=majority
+      - key: MONGODB_URI
         sync: false
       - key: DEFAULT_REGION
         value: US

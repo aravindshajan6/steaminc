@@ -20,7 +20,11 @@ WORKDIR /app
 # Backend resolves the UI at ../frontend/public relative to itself, so the two
 # directories must keep their relative positions inside the image.
 COPY backend/package.json ./backend/
-COPY backend/server.js backend/archive.js backend/auth.js ./backend/
+# The mongodb driver — needed on hosts without a persistent disk, where file
+# storage would be wiped on every restart. Own layer so source edits skip it.
+RUN cd backend && npm install --omit=dev --no-audit --no-fund
+
+COPY backend/server.js backend/archive.js backend/auth.js backend/store.js backend/mongo-store.js ./backend/
 COPY backend/data ./backend/data
 COPY frontend/public ./frontend/public
 
