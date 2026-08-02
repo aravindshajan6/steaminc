@@ -3,7 +3,8 @@
 # files live — a path-anchored rule silently stops matching the moment you move a
 # directory, which is exactly how account data gets committed by accident.
 .env
-.env.local
+.env.*
+!.env.example
 
 **/accounts.json
 **/accounts.json.tmp

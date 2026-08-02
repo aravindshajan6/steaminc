@@ -448,6 +448,15 @@ const ROUTES = {
 
 /* ---------------------------------------------------------------- static --- */
 
+// nginx sets these in front of the split deployment, but the single-service image
+// (Render, Fly) serves static files straight from here with no proxy in front —
+// so they have to be set here too, or they silently vanish in production.
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "SAMEORIGIN",
+  "referrer-policy": "strict-origin-when-cross-origin",
+};
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -477,6 +486,7 @@ async function serveStatic(pathname, res) {
       // no-cache everywhere: there is no build step or content hashing here, so a
       // cached app.js silently serves stale code after every edit.
       "cache-control": "no-cache",
+      ...SECURITY_HEADERS,
     });
     res.end(body);
   } catch {
@@ -489,6 +499,7 @@ function send(res, status, payload, headers = {}) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
+    ...SECURITY_HEADERS,
     ...headers,
   });
   res.end(body);
